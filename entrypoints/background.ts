@@ -7,12 +7,19 @@ import { browser } from 'wxt/browser';
 import type { BackgroundMessage, BackgroundResponse } from '@/lib/messages';
 import { queryAudibleTabs, setTabMuted } from '@/lib/audible-tabs';
 import { getSiteVolume, setSiteVolume } from '@/lib/storage';
-import { requestOriginPermission } from '@/lib/permissions';
+import { hasOriginPermission } from '@/lib/permissions';
 import { matchPatternForOrigin } from '@/lib/origin';
 
 const CONTENT_JS = 'content-scripts/content.js';
 
-async function ensureContentScript(origin: string, tabId: number): Promise<void> {
+// Reverses `matchPatternForOrigin`: `*://<host>/*` -> `<host>`. Used to turn
+// already-granted permission patterns (from `permissions.getAll`) back into
+// origins we can re-register content scripts for.
+function hostFromOriginPattern(pattern: string): string | null {
+  return /^\*:\/\/([^/]+)\/\*$/.exec(pattern)?.[1] ?? null;
+}
+
+async function registerOriginScript(origin: string): Promise<void> {
   const id = `tabtune-${origin}`;
   const pattern = matchPatternForOrigin(origin);
   // Register for future loads (idempotent: unregister-if-exists then register).
@@ -24,11 +31,32 @@ async function ensureContentScript(origin: string, tabId: number): Promise<void>
   await browser.scripting.registerContentScripts([
     { id, js: [CONTENT_JS], matches: [pattern], runAt: 'document_start', allFrames: true },
   ]);
+}
+
+async function ensureContentScript(origin: string, tabId: number): Promise<void> {
+  await registerOriginScript(origin);
   // Inject immediately into the current tab so the slider works without a reload.
   try {
     await browser.scripting.executeScript({ target: { tabId, allFrames: true }, files: [CONTENT_JS] });
   } catch {
     /* tab may be a restricted page */
+  }
+}
+
+// Extension updates/browser restarts drop `scripting.registerContentScripts`
+// registrations but NOT the granted host permissions, so on `onInstalled` we
+// re-derive the granted origins from `permissions.getAll` and re-register
+// their content scripts (registration only — no tab to inject into yet).
+export async function reregisterGrantedOrigins(): Promise<void> {
+  const { origins = [] } = await browser.permissions.getAll();
+  for (const pattern of origins) {
+    const host = hostFromOriginPattern(pattern);
+    if (!host) continue;
+    try {
+      await registerOriginScript(host);
+    } catch {
+      /* one origin's registration failing shouldn't block the rest */
+    }
   }
 }
 
@@ -59,7 +87,13 @@ export async function handleMessage(
       await browser.tabs.sendMessage(msg.tabId, { type: 'applyVolume', volume: msg.volume }).catch(() => {});
       return;
     case 'grantSite': {
-      const granted = await requestOriginPermission(msg.origin);
+      // NOTE: the popup already called `requestOriginPermission` under the
+      // click's user gesture (see popup/App.tsx `unlock`). Re-requesting here
+      // would run in the service-worker context, which has no user gesture to
+      // point to, so Chrome could reject the request even though the
+      // permission was in fact just granted. `permissions.contains` carries no
+      // gesture requirement, so we just confirm what the popup already did.
+      const granted = await hasOriginPermission(msg.origin);
       if (granted) await ensureContentScript(msg.origin, msg.tabId);
       return { granted };
     }
@@ -68,8 +102,11 @@ export async function handleMessage(
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    handleMessage(msg as BackgroundMessage, sender).then(sendResponse);
+    handleMessage(msg as BackgroundMessage, sender)
+      .then(sendResponse)
+      .catch(() => sendResponse(undefined)); // a handler failure must still respond, or the popup's await hangs
     return true; // keep the channel open for the async response
   });
   browser.commands.onCommand.addListener((command) => { handleCommand(command); });
+  browser.runtime.onInstalled.addListener(reregisterGrantedOrigins);
 });

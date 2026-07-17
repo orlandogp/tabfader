@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing';
-import { handleMessage } from './background';
+import { handleMessage, reregisterGrantedOrigins } from './background';
 
 describe('handleMessage', () => {
   it('list returns audible tabs', async () => {
@@ -37,8 +37,11 @@ describe('handleMessage', () => {
     expect(fakeBrowser.tabs.sendMessage).toHaveBeenCalledWith(9, { type: 'applyVolume', volume: 0.5 });
   });
 
-  it('grantSite requests permission and reports the result', async () => {
-    fakeBrowser.permissions.request = vi.fn(async () => true) as any;
+  it('grantSite confirms the already-granted permission and reports the result', async () => {
+    // NOTE: the handler now checks with `permissions.contains` instead of
+    // (re-)requesting — the popup already requested it under the click gesture,
+    // and re-requesting from the service worker has no gesture to point to.
+    fakeBrowser.permissions.contains = vi.fn(async () => true) as any;
     // NOTE (resolution 3): @webext-core/fake-browser has no `scripting` namespace at
     // all (confirmed: no `scripting` in its typings), so it must be created before
     // its methods can be assigned.
@@ -49,7 +52,7 @@ describe('handleMessage', () => {
     };
     const res = await handleMessage({ type: 'grantSite', tabId: 9, origin: 'a.com' }, {} as any);
     expect(res).toEqual({ granted: true });
-    expect(fakeBrowser.permissions.request).toHaveBeenCalledWith({ origins: ['*://a.com/*'] });
+    expect(fakeBrowser.permissions.contains).toHaveBeenCalledWith({ origins: ['*://a.com/*'] });
     expect((fakeBrowser as any).scripting.registerContentScripts).toHaveBeenCalledWith([
       {
         id: 'tabtune-a.com',
@@ -65,8 +68,8 @@ describe('handleMessage', () => {
     });
   });
 
-  it('grantSite does not register scripts when permission is denied', async () => {
-    fakeBrowser.permissions.request = vi.fn(async () => false) as any;
+  it('grantSite does not register scripts when permission is not granted', async () => {
+    fakeBrowser.permissions.contains = vi.fn(async () => false) as any;
     (fakeBrowser as any).scripting = {
       registerContentScripts: vi.fn(async () => undefined),
       unregisterContentScripts: vi.fn(async () => undefined),
@@ -76,5 +79,33 @@ describe('handleMessage', () => {
     expect(res).toEqual({ granted: false });
     expect((fakeBrowser as any).scripting.registerContentScripts).not.toHaveBeenCalled();
     expect((fakeBrowser as any).scripting.executeScript).not.toHaveBeenCalled();
+  });
+});
+
+describe('reregisterGrantedOrigins', () => {
+  it('re-registers a content script for every already-granted origin', async () => {
+    // Simulates an extension update / browser restart: registrations
+    // (scripting.registerContentScripts) are lost but the granted host
+    // permissions survive, so onInstalled must rebuild the registrations from
+    // `permissions.getAll`.
+    fakeBrowser.permissions.getAll = vi.fn(async () => ({
+      origins: ['*://youtube.com/*'],
+      permissions: [],
+    })) as any;
+    (fakeBrowser as any).scripting = {
+      registerContentScripts: vi.fn(async () => undefined),
+      unregisterContentScripts: vi.fn(async () => undefined),
+      executeScript: vi.fn(async () => [] as any),
+    };
+    await reregisterGrantedOrigins();
+    expect((fakeBrowser as any).scripting.registerContentScripts).toHaveBeenCalledWith([
+      {
+        id: 'tabtune-youtube.com',
+        js: ['content-scripts/content.js'],
+        matches: ['*://youtube.com/*'],
+        runAt: 'document_start',
+        allFrames: true,
+      },
+    ]);
   });
 });
