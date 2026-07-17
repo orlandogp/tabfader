@@ -50,5 +50,31 @@ describe('handleMessage', () => {
     const res = await handleMessage({ type: 'grantSite', tabId: 9, origin: 'a.com' }, {} as any);
     expect(res).toEqual({ granted: true });
     expect(fakeBrowser.permissions.request).toHaveBeenCalledWith({ origins: ['*://a.com/*'] });
+    expect((fakeBrowser as any).scripting.registerContentScripts).toHaveBeenCalledWith([
+      {
+        id: 'tabtune-a.com',
+        js: ['content-scripts/content.js'],
+        matches: ['*://a.com/*'],
+        runAt: 'document_start',
+        allFrames: true,
+      },
+    ]);
+    expect((fakeBrowser as any).scripting.executeScript).toHaveBeenCalledWith({
+      target: { tabId: 9, allFrames: true },
+      files: ['content-scripts/content.js'],
+    });
+  });
+
+  it('grantSite does not register scripts when permission is denied', async () => {
+    fakeBrowser.permissions.request = vi.fn(async () => false) as any;
+    (fakeBrowser as any).scripting = {
+      registerContentScripts: vi.fn(async () => undefined),
+      unregisterContentScripts: vi.fn(async () => undefined),
+      executeScript: vi.fn(async () => [] as any),
+    };
+    const res = await handleMessage({ type: 'grantSite', tabId: 9, origin: 'a.com' }, {} as any);
+    expect(res).toEqual({ granted: false });
+    expect((fakeBrowser as any).scripting.registerContentScripts).not.toHaveBeenCalled();
+    expect((fakeBrowser as any).scripting.executeScript).not.toHaveBeenCalled();
   });
 });
