@@ -28,5 +28,11 @@ export default defineConfig({
     permissions: ['tabs', 'storage', 'scripting'],
     optional_host_permissions: ['*://*/*'],
     action: { default_title: 'TabTune' },
+    commands: {
+      'toggle-mute-active': {
+        suggested_key: { default: 'Alt+Shift+M' },
+        description: 'Mute/unmute the active tab',
+      },
+    },
   },
 });
