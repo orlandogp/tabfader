@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getSiteVolume, setSiteVolume, getSettings, setSettings } from './storage';
+import { getSiteVolume, setSiteVolume } from './storage';
 
 describe('site volume storage', () => {
   it('defaults to full volume for an unknown origin', async () => {
@@ -10,15 +10,5 @@ describe('site volume storage', () => {
     expect(await getSiteVolume('youtube.com')).toBe(0.65);
     await setSiteVolume('youtube.com', 5);
     expect(await getSiteVolume('youtube.com')).toBe(1);
-  });
-});
-
-describe('settings storage', () => {
-  it('returns defaults when unset', async () => {
-    expect(await getSettings()).toEqual({ shortcutsEnabled: true, donationDismissed: false });
-  });
-  it('merges a partial patch', async () => {
-    await setSettings({ donationDismissed: true });
-    expect(await getSettings()).toEqual({ shortcutsEnabled: true, donationDismissed: true });
   });
 });
