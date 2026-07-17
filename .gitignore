@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# WXT build output & generated types
+.output/
+.wxt/
+stats.html
+
+# Test artifacts
+e2e/test-results/
+e2e/report/
+e2e/.auth/
+
+# Env
+.env
+.env.*.local
+!.env.test.local.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
