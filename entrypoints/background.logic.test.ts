@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing';
-import { handleMessage, reregisterGrantedOrigins } from './background';
+import { handleMessage, reregisterGrantedOrigins, handlePermissionsAdded } from './background';
 
 describe('handleMessage', () => {
   it('list returns audible tabs', async () => {
@@ -79,6 +79,52 @@ describe('handleMessage', () => {
     expect(res).toEqual({ granted: false });
     expect((fakeBrowser as any).scripting.registerContentScripts).not.toHaveBeenCalled();
     expect((fakeBrowser as any).scripting.executeScript).not.toHaveBeenCalled();
+  });
+});
+
+describe('handlePermissionsAdded', () => {
+  // ROOT CAUSE (field-confirmed): the native permission prompt steals focus and
+  // CLOSES the popup, killing its JS — so the popup code after
+  // `await requestOriginPermission(...)` (sending grantSite -> register+inject)
+  // never runs. The permission itself still gets granted at browser level.
+  // The background must therefore self-converge on `permissions.onAdded`:
+  // register the origin script AND inject into already-open matching tabs.
+  it('registers the origin script and injects into open matching tabs', async () => {
+    (fakeBrowser as any).scripting = {
+      registerContentScripts: vi.fn(async () => undefined),
+      unregisterContentScripts: vi.fn(async () => undefined),
+      executeScript: vi.fn(async () => [] as any),
+    };
+    fakeBrowser.tabs.query = vi.fn(async () => [
+      { id: 42, url: 'https://a.com/watch' } as chrome.tabs.Tab,
+    ]) as any;
+
+    await handlePermissionsAdded({ origins: ['*://a.com/*'], permissions: [] });
+
+    expect((fakeBrowser as any).scripting.registerContentScripts).toHaveBeenCalledWith([
+      {
+        id: 'tabtune-a.com',
+        js: ['content-scripts/content.js'],
+        matches: ['*://a.com/*'],
+        runAt: 'document_start',
+        allFrames: true,
+      },
+    ]);
+    expect(fakeBrowser.tabs.query).toHaveBeenCalledWith({ url: '*://a.com/*' });
+    expect((fakeBrowser as any).scripting.executeScript).toHaveBeenCalledWith({
+      target: { tabId: 42, allFrames: true },
+      files: ['content-scripts/content.js'],
+    });
+  });
+
+  it('does nothing when the added permission has no origins', async () => {
+    (fakeBrowser as any).scripting = {
+      registerContentScripts: vi.fn(async () => undefined),
+      unregisterContentScripts: vi.fn(async () => undefined),
+      executeScript: vi.fn(async () => [] as any),
+    };
+    await handlePermissionsAdded({ permissions: ['tabs'] });
+    expect((fakeBrowser as any).scripting.registerContentScripts).not.toHaveBeenCalled();
   });
 });
 
