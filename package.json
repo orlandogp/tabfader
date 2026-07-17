@@ -1,21 +1,20 @@
 {
   "name": "tabtune",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Trust-first per-tab audio control extension for Chromium browsers",
   "scripts": {
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",
+    "postinstall": "wxt prepare",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:component": "vitest run --project component --passWithNoTests",
     "test:watch": "vitest",
     "e2e": "playwright test"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "orlandogp",
+  "license": "MIT",
   "packageManager": "pnpm@10.33.0",
   "type": "module",
   "dependencies": {
