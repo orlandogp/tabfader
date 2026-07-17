@@ -6,10 +6,6 @@ export default defineConfig({
   plugins: [WxtVitest()],
   test: {
     globals: true,
-    // NOTE: passWithNoTests is a root-only option in Vitest 4 (NonProjectOptions),
-    // not settable per-project. Needed so `test:component` doesn't exit 1 until the
-    // first *.browser.test.tsx lands.
-    passWithNoTests: true,
     projects: [
       {
         extends: true,
