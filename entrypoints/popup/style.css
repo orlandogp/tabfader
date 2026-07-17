@@ -1,0 +1,17 @@
+.panel { width: 330px; font: 13px/1.4 system-ui, sans-serif; }
+.header { display: flex; align-items: center; gap: 9px; padding: 12px 14px; border-bottom: 1px solid #8884; }
+.name { font-weight: 700; }
+.all-mute { margin-left: auto; font-size: 11px; padding: 4px 9px; border-radius: 7px; border: 1px solid #8886; background: transparent; cursor: pointer; }
+.section-label { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; opacity: .55; padding: 11px 14px 5px; }
+.empty { padding: 10px 14px; opacity: .6; }
+.tab-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-top: 1px solid #8882; }
+.tab-row .fav { width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; background: #8883; }
+.meta { flex: 1; min-width: 0; }
+.title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.origin { font-size: 11px; opacity: .55; }
+.unlock { margin-top: 6px; font-size: 12px; padding: 5px 10px; border-radius: 8px; border: 1px dashed #5b9dff88; color: #5b9dff; background: #5b9dff10; cursor: pointer; }
+.mute { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; border: 1px solid #8886; background: transparent; cursor: pointer; }
+.footer { padding: 10px; border-top: 1px solid #8883; text-align: center; }
+.trust { font-size: 11px; opacity: .6; }
+.donate { display: inline-block; margin-top: 6px; font-size: 12px; color: #5b9dff; }
+input[type=range] { width: 100%; margin-top: 6px; }
