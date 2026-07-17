@@ -73,22 +73,25 @@ tabtune/
 - Consumes: nothing (first task).
 - Produces: a buildable WXT+Preact project and a working `pnpm test` command.
 
-- [ ] **Step 1: Initialize the WXT + Preact project**
+- [ ] **Step 1: Initialize dependencies (manual WXT setup — the dir is non-empty)**
 
-Run in the `tabtune/` directory (it already contains `docs/`):
+The `tabtune/` directory already contains `.git/`, `docs/`, `CLAUDE.md`, and `.gitignore`, so `wxt init` (which requires an empty dir) is NOT used. Scaffold manually:
 ```bash
 cd tabtune
-pnpm dlx wxt@latest init . --template preact --pm pnpm
+pnpm init
+pnpm pkg set type=module
+pnpm add preact
+pnpm add -D wxt @wxt-dev/module-preact
 pnpm add -D vitest @testing-library/preact @testing-library/jest-dom jsdom
 pnpm add -D @vitest/browser playwright          # component tests in real Chromium (tuno Layer 2)
 pnpm add -D @playwright/test                     # extension E2E
 pnpm exec playwright install chromium
 ```
-Expected: `entrypoints/`, `wxt.config.ts`, `package.json` created; dependencies installed.
+Expected: `package.json` created; all dependencies installed.
 
-- [ ] **Step 2: Configure WXT manifest and Preact module**
+- [ ] **Step 2: Create WXT config, tsconfig, and popup skeleton**
 
-Replace `wxt.config.ts` with:
+Create `wxt.config.ts`:
 ```ts
 import { defineConfig } from 'wxt';
 
@@ -103,7 +106,48 @@ export default defineConfig({
   },
 });
 ```
-Then install the Preact module: `pnpm add -D @wxt-dev/module-preact`.
+
+Create `tsconfig.json` (extends WXT's generated config; sets Preact JSX):
+```json
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
+  }
+}
+```
+
+Generate WXT types + the `@/` path alias:
+```bash
+pnpm wxt prepare
+```
+
+Create the minimal popup entrypoint (replaced with the real panel in Task 14):
+
+`entrypoints/popup/index.html`:
+```html
+<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>TabTune</title></head>
+  <body><div id="app"></div><script type="module" src="./main.tsx"></script></body>
+</html>
+```
+
+`entrypoints/popup/main.tsx`:
+```tsx
+import { render } from 'preact';
+import { App } from './App';
+
+render(<App />, document.getElementById('app')!);
+```
+
+`entrypoints/popup/App.tsx`:
+```tsx
+export function App() {
+  return <div>TabTune</div>;
+}
+```
 
 - [ ] **Step 3: Configure Vitest with the WXT plugin**
 
@@ -202,34 +246,12 @@ Expected: PASS, 1 test.
 Run: `pnpm build`
 Expected: Build succeeds; `.output/chrome-mv3/` contains `manifest.json` with `"manifest_version": 3` and the popup.
 
-- [ ] **Step 7: Install the testing working-agreement (from tuno-testing discipline)**
+- [ ] **Step 7: Commit**
 
-Create `CLAUDE.md`:
-```markdown
-# TabTune
-
-Trust-first per-tab audio extension (MV3, WXT + Preact). 100% local — no backend,
-no telemetry, no accounts.
-
-## Testing ecosystem (partial adoption of tuno-testing)
-
-- **Layers used:** unit (vitest, jsdom + fakeBrowser) · component (vitest **browser
-  mode**, `*.browser.test.tsx`, real Chromium) · E2E (Playwright, extension loaded
-  via `--load-extension`). We do NOT use tuno's Next.js E2E template (no server/backend here).
-- **Before declaring UI work done:** run `pnpm test` (both projects green) and, for
-  flows with a spec, `pnpm e2e`.
-- **Every red test is classified into exactly one bucket — never silenced:**
-  - *Regression* → fix the product code.
-  - *Intentional* → update the spec in the SAME change as the feature.
-  - *Fragile* → fix the test (semantic selectors, stabilization).
-- Specs land in the same change as the feature they cover, not "later".
-```
-
-- [ ] **Step 8: Commit**
-
+`CLAUDE.md` and `.gitignore` already exist at the repo root (created at project init, carrying the commit convention and testing agreement). `git add -A` includes the new scaffold files.
 ```bash
 git add -A
-git commit -m "chore: scaffold WXT + Preact + Vitest (unit + browser-mode) toolchain"
+git commit -m "chore(core): scaffold wxt + preact + vitest toolchain"
 ```
 
 ---
@@ -304,7 +326,7 @@ Expected: PASS.
 
 ```bash
 git add lib/types.ts lib/types.test.ts
-git commit -m "feat: add shared domain types and default settings"
+git commit -m "feat(core): add shared domain types and settings"
 ```
 
 ---
@@ -398,7 +420,7 @@ Expected: PASS, 5 tests.
 
 ```bash
 git add lib/origin.ts lib/origin.test.ts
-git commit -m "feat: add origin/url helpers"
+git commit -m "feat(core): add origin/url helpers"
 ```
 
 ---
@@ -483,7 +505,7 @@ Expected: PASS, 4 tests.
 
 ```bash
 git add lib/volume.ts lib/volume.test.ts
-git commit -m "feat: add volume conversion helpers"
+git commit -m "feat(core): add volume conversion helpers"
 ```
 
 ---
@@ -584,7 +606,7 @@ Expected: PASS, 4 tests.
 
 ```bash
 git add lib/storage.ts lib/storage.test.ts
-git commit -m "feat: add typed storage layer for site volume and settings"
+git commit -m "feat(core): add typed storage for volume and settings"
 ```
 
 ---
@@ -697,7 +719,7 @@ Expected: PASS.
 
 ```bash
 git add lib/audible-tabs.ts lib/audible-tabs.test.ts
-git commit -m "feat: add audible tabs query and mute service"
+git commit -m "feat(tabs): add audible tabs query and mute service"
 ```
 
 ---
@@ -782,7 +804,7 @@ Expected: PASS, 3 tests.
 
 ```bash
 git add lib/permissions.ts lib/permissions.test.ts
-git commit -m "feat: add per-origin permissions helper"
+git commit -m "feat(permissions): add per-origin permissions helper"
 ```
 
 ---
@@ -873,7 +895,7 @@ Expected: PASS, 2 tests.
 
 ```bash
 git add lib/messages.ts lib/messages.test.ts
-git commit -m "feat: add typed message protocol and transport wrappers"
+git commit -m "feat(core): add typed message protocol and transport"
 ```
 
 ---
@@ -976,7 +998,7 @@ Expected: Build succeeds; `.output/chrome-mv3/content-scripts/content.js` exists
 
 ```bash
 git add entrypoints/content.ts entrypoints/content.logic.test.ts
-git commit -m "feat: add runtime-registered content script for volume control"
+git commit -m "feat(content): add content script for volume control"
 ```
 
 ---
@@ -1117,7 +1139,7 @@ Expected: PASS, 4 tests.
 
 ```bash
 git add entrypoints/background.ts entrypoints/background.logic.test.ts
-git commit -m "feat: add background service worker message router"
+git commit -m "feat(background): add service worker message router"
 ```
 
 ---
@@ -1180,7 +1202,7 @@ export function VolumeSlider({ value, onChange }: Props) {
       min={0}
       max={100}
       value={unitToPercent(value)}
-      aria-label="Volumen"
+      aria-label="Volume"
       onInput={(e) => onChange(percentToUnit(Number((e.target as HTMLInputElement).value)))}
     />
   );
@@ -1196,7 +1218,7 @@ Expected: PASS, 2 tests.
 
 ```bash
 git add entrypoints/popup/components/VolumeSlider.tsx entrypoints/popup/components/VolumeSlider.browser.test.tsx
-git commit -m "feat: add VolumeSlider component"
+git commit -m "feat(popup): add volume slider component"
 ```
 
 ---
@@ -1229,7 +1251,7 @@ describe('TabRow', () => {
       <TabRow tab={tab} granted={false} volume={1} onToggleMute={() => {}} onUnlock={onUnlock} onVolume={() => {}} />,
     );
     expect(queryByRole('slider')).toBeNull();
-    fireEvent.click(getByText(/controlar volumen/i));
+    fireEvent.click(getByText(/control volume/i));
     expect(onUnlock).toHaveBeenCalled();
   });
 
@@ -1245,7 +1267,7 @@ describe('TabRow', () => {
     const { getByLabelText } = render(
       <TabRow tab={tab} granted={true} volume={1} onToggleMute={onToggleMute} onUnlock={() => {}} onVolume={() => {}} />,
     );
-    fireEvent.click(getByLabelText(/silenciar/i));
+    fireEvent.click(getByLabelText(/^mute$/i));
     expect(onToggleMute).toHaveBeenCalled();
   });
 });
@@ -1278,12 +1300,12 @@ export function TabRow({ tab, granted, volume, onToggleMute, onUnlock, onVolume 
       {tab.favIconUrl ? <img class="fav" src={tab.favIconUrl} alt="" width={18} height={18} /> : <span class="fav" />}
       <div class="meta">
         <div class="title">{tab.title}</div>
-        <div class="origin">{tab.origin}{tab.muted ? ' · silenciado' : ''}</div>
+        <div class="origin">{tab.origin}{tab.muted ? ' · muted' : ''}</div>
         {granted
           ? <VolumeSlider value={volume} onChange={onVolume} />
-          : <button class="unlock" onClick={onUnlock}>🎚️ Controlar volumen aquí →</button>}
+          : <button class="unlock" onClick={onUnlock}>🎚️ Control volume here →</button>}
       </div>
-      <button class="mute" aria-label={tab.muted ? 'Reactivar' : 'Silenciar'} onClick={onToggleMute}>
+      <button class="mute" aria-label={tab.muted ? 'Unmute' : 'Mute'} onClick={onToggleMute}>
         {tab.muted ? '🔇' : '🔊'}
       </button>
     </div>
@@ -1300,7 +1322,7 @@ Expected: PASS, 3 tests.
 
 ```bash
 git add entrypoints/popup/components/TabRow.tsx entrypoints/popup/components/TabRow.browser.test.tsx
-git commit -m "feat: add TabRow component"
+git commit -m "feat(popup): add tab row component"
 ```
 
 ---
@@ -1325,7 +1347,7 @@ import { DonationFooter } from './DonationFooter';
 describe('DonationFooter', () => {
   it('renders the trust line and an external donation link', () => {
     const { getByText, getByRole } = render(<DonationFooter donateUrl="https://ko-fi.com/tabtune" />);
-    expect(getByText(/todo local/i)).toBeTruthy();
+    expect(getByText(/fully local/i)).toBeTruthy();
     const link = getByRole('link') as HTMLAnchorElement;
     expect(link.href).toBe('https://ko-fi.com/tabtune');
     expect(link.target).toBe('_blank');
@@ -1350,8 +1372,8 @@ interface Props {
 export function DonationFooter({ donateUrl }: Props) {
   return (
     <footer class="footer">
-      <div class="trust">🔒 Todo local · Sin recolección de datos · Open source</div>
-      <a class="donate" href={donateUrl} target="_blank" rel="noopener noreferrer">☕ Invítame un café</a>
+      <div class="trust">🔒 Fully local · No data collection · Open source</div>
+      <a class="donate" href={donateUrl} target="_blank" rel="noopener noreferrer">☕ Buy me a coffee</a>
     </footer>
   );
 }
@@ -1366,7 +1388,7 @@ Expected: PASS.
 
 ```bash
 git add entrypoints/popup/components/DonationFooter.tsx entrypoints/popup/components/DonationFooter.browser.test.tsx
-git commit -m "feat: add DonationFooter component"
+git commit -m "feat(popup): add donation footer component"
 ```
 
 ---
@@ -1410,7 +1432,7 @@ describe('App', () => {
   it('sends muteAll when the master button is clicked', async () => {
     render(<App donateUrl="https://ko-fi.com/x" />);
     await waitFor(() => screen.getByText('Lofi'));
-    fireEvent.click(screen.getByText(/silenciar todo/i));
+    fireEvent.click(screen.getByText(/mute all/i));
     expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'muteAll' });
   });
 });
@@ -1479,12 +1501,12 @@ export function App({ donateUrl }: { donateUrl: string }) {
         <span class="logo">🎚️</span>
         <span class="name">TabTune</span>
         <button class="all-mute" onClick={() => sendToBackground({ type: 'muteAll' }).then(refresh)}>
-          🔇 Silenciar todo
+          🔇 Mute all
         </button>
       </header>
 
-      <div class="section-label">🟢 Sonando ahora</div>
-      {tabs.length === 0 && <div class="empty">Nada suena ahora mismo.</div>}
+      <div class="section-label">🟢 Playing now</div>
+      {tabs.length === 0 && <div class="empty">Nothing is playing right now.</div>}
       {tabs.map((t) => (
         <TabRow
           key={t.id}
@@ -1557,7 +1579,7 @@ Expected: All unit tests PASS; build succeeds.
 
 ```bash
 git add entrypoints/popup/
-git commit -m "feat: assemble popup panel with live tab list and actions"
+git commit -m "feat(popup): assemble panel with live tab list"
 ```
 
 ---
@@ -1579,7 +1601,7 @@ In `wxt.config.ts`, add to `manifest`:
     commands: {
       'toggle-mute-active': {
         suggested_key: { default: 'Alt+Shift+M' },
-        description: 'Silenciar/reactivar la pestaña activa',
+        description: 'Mute/unmute the active tab',
       },
     },
 ```
@@ -1635,7 +1657,7 @@ Expected: PASS.
 
 ```bash
 git add wxt.config.ts entrypoints/background.ts entrypoints/background.commands.test.ts
-git commit -m "feat: add keyboard shortcut to mute the active tab"
+git commit -m "feat(background): mute active tab via shortcut"
 ```
 
 ---
@@ -1718,11 +1740,11 @@ test('popup lists the audible tab and mutes it', async ({ context, extensionId }
   await popup.goto(`chrome-extension://${extensionId}/popup.html`);
 
   // The audible page should appear in the list; mute button toggles.
-  await expect(popup.getByRole('button', { name: /silenciar todo/i })).toBeVisible();
-  await popup.getByRole('button', { name: /silenciar todo/i }).click();
+  await expect(popup.getByRole('button', { name: /mute all/i })).toBeVisible();
+  await popup.getByRole('button', { name: /mute all/i }).click();
 
   // Verify the media tab reports muted via the extension state.
-  await expect(popup.getByText(/silenciado/i)).toBeVisible({ timeout: 5000 });
+  await expect(popup.getByText(/muted/i)).toBeVisible({ timeout: 5000 });
 });
 ```
 
@@ -1731,13 +1753,13 @@ test('popup lists the audible tab and mutes it', async ({ context, extensionId }
 Run: `pnpm build && pnpm e2e`
 Expected: The spec passes (a headed Chromium window opens briefly).
 
-> If the audible tab does not appear because the data-URI video never truly emits audio, replace `media-page.html`'s source with a short real audio file committed under `e2e/` and reference it via `file://`. The assertion on `/silenciado/i` after "Silenciar todo" is the reliable end-to-end signal.
+> If the audible tab does not appear because the data-URI video never truly emits audio, replace `media-page.html`'s source with a short real audio file committed under `e2e/` and reference it via `file://`. The assertion on `/muted/i` after "Mute all" is the reliable end-to-end signal.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add e2e/ playwright.config.ts
-git commit -m "test: add Playwright E2E smoke loading the extension"
+git commit -m "chore(e2e): add playwright smoke loading extension"
 ```
 
 ---
@@ -1757,11 +1779,11 @@ Run: `pnpm dev` (loads the extension in a dev browser).
 Manually verify and check off:
 - [ ] YouTube playing → appears in the list with title + favicon.
 - [ ] Mute/unmute works on YouTube with no permission prompt.
-- [ ] "Controlar volumen aquí" on YouTube → permission prompt for youtube.com only → slider appears → dragging changes volume audibly.
+- [ ] "Control volume here" on YouTube → permission prompt for youtube.com only → slider appears → dragging changes volume audibly.
 - [ ] Reload YouTube → the stored volume re-applies automatically.
 - [ ] Twitch and a generic `<video>` site behave the same.
 - [ ] Netflix (DRM): mute works; note that fine volume attenuation via `.volume` also applies (no boost).
-- [ ] "Silenciar todo" mutes every listed tab.
+- [ ] "Mute all" mutes every listed tab.
 - [ ] Keyboard shortcut mutes the active tab.
 
 - [ ] **Step 2: Write the README**
@@ -1799,7 +1821,7 @@ Widevine-DRM audio (Netflix, Disney+, Prime Video) can be muted/attenuated but
 
 ```bash
 git add README.md
-git commit -m "docs: add README with install, trust model, and DRM note"
+git commit -m "docs(core): add readme with install and trust notes"
 ```
 
 ---
