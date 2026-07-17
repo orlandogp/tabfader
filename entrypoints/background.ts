@@ -60,6 +60,38 @@ export async function reregisterGrantedOrigins(): Promise<void> {
   }
 }
 
+// ROOT CAUSE FIX (field-confirmed bug): the native permission prompt steals
+// focus and CLOSES the popup, killing its JS — so the popup's post-grant code
+// (grantSite -> register + inject) never runs, leaving a granted-but-dead
+// slider. The grant orchestration must live here, in the service worker, which
+// survives the popup: when the browser confirms a host permission was added,
+// register the origin's content script and inject it into every already-open
+// matching tab. `grantSite` stays as an idempotent belt-and-braces path for
+// the rare case the popup survives the prompt.
+export async function handlePermissionsAdded(perms: chrome.permissions.Permissions): Promise<void> {
+  for (const pattern of perms.origins ?? []) {
+    const host = hostFromOriginPattern(pattern);
+    if (!host) continue;
+    try {
+      await registerOriginScript(host);
+      const tabs = await browser.tabs.query({ url: pattern });
+      for (const tab of tabs) {
+        if (tab.id == null) continue;
+        try {
+          await browser.scripting.executeScript({
+            target: { tabId: tab.id, allFrames: true },
+            files: [CONTENT_JS],
+          });
+        } catch {
+          /* restricted page — mute still works there */
+        }
+      }
+    } catch {
+      /* one origin failing shouldn't block the rest */
+    }
+  }
+}
+
 export async function handleCommand(command: string): Promise<void> {
   if (command !== 'toggle-mute-active') return;
   const [active] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -109,4 +141,5 @@ export default defineBackground(() => {
   });
   browser.commands.onCommand.addListener((command) => { handleCommand(command); });
   browser.runtime.onInstalled.addListener(reregisterGrantedOrigins);
+  browser.permissions.onAdded.addListener(handlePermissionsAdded);
 });
