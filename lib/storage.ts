@@ -1,11 +1,6 @@
 import { storage } from '#imports';
-import type { SitePref, Settings } from './types';
-import { DEFAULT_SETTINGS } from './types';
+import type { SitePref } from './types';
 import { clampVolume, DEFAULT_VOLUME } from './volume';
-
-const settingsItem = storage.defineItem<Settings>('local:settings', {
-  fallback: DEFAULT_SETTINGS,
-});
 
 function siteItem(origin: string) {
   return storage.defineItem<SitePref | null>(`local:site:${origin}`, {
@@ -20,13 +15,4 @@ export async function getSiteVolume(origin: string): Promise<number> {
 
 export async function setSiteVolume(origin: string, volume: number): Promise<void> {
   await siteItem(origin).setValue({ volume: clampVolume(volume) });
-}
-
-export async function getSettings(): Promise<Settings> {
-  return settingsItem.getValue();
-}
-
-export async function setSettings(patch: Partial<Settings>): Promise<void> {
-  const current = await settingsItem.getValue();
-  await settingsItem.setValue({ ...current, ...patch });
 }

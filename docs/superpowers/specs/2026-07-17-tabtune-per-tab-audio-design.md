@@ -121,16 +121,13 @@ Descartados: **CRXJS** (mantenimiento estancado 2025–2026) y **Plasmo** (super
   "sitePrefs": {
     "youtube.com":  { "volume": 0.65 },
     "twitch.tv":    { "volume": 1.0 }
-  },
-  "settings": {
-    "shortcutsEnabled": true,
-    "donationDismissed": false
   }
 }
 ```
 
 - El nivel de volumen se guarda **por origen** (host), no por pestaña, para que se recuerde entre sesiones.
 - Los orígenes concedidos también los reporta `chrome.permissions.getAll()` (fuente de verdad de permisos); `sitePrefs` guarda el nivel deseado.
+- **Nota:** v1 solo guarda el volumen por sitio; un objeto `settings` (toggle de atajos, descarte de la donación) fue descartado como peso muerto hasta que exista un consumidor real.
 
 ## 7. Permisos (manifest MV3) y honestidad con el usuario
 
