@@ -23,3 +23,6 @@ via an opt-in permission. 100% local — no telemetry, no affiliates, open sourc
 ## Known limitation
 Widevine-DRM audio (Netflix, Disney+, Prime Video) can be muted/attenuated but
 **not boosted** — this is a browser-level restriction, not a TabTune bug.
+
+## License
+MIT
