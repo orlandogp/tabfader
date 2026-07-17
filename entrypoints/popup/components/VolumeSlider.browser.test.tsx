@@ -14,4 +14,9 @@ describe('VolumeSlider', () => {
     fireEvent.input(getByRole('slider'), { target: { value: '40' } });
     expect(onChange).toHaveBeenCalledWith(0.4);
   });
+
+  it('shows the current percent as text', () => {
+    const { getByText } = render(<VolumeSlider value={0.65} onChange={() => {}} />);
+    expect(getByText('65%')).toBeTruthy();
+  });
 });
