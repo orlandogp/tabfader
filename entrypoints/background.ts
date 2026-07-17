@@ -32,6 +32,13 @@ async function ensureContentScript(origin: string, tabId: number): Promise<void>
   }
 }
 
+export async function handleCommand(command: string): Promise<void> {
+  if (command !== 'toggle-mute-active') return;
+  const [active] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (active?.id == null) return;
+  await setTabMuted(active.id, !(active.mutedInfo?.muted ?? false));
+}
+
 export async function handleMessage(
   msg: BackgroundMessage,
   _sender: chrome.runtime.MessageSender,
@@ -64,4 +71,5 @@ export default defineBackground(() => {
     handleMessage(msg as BackgroundMessage, sender).then(sendResponse);
     return true; // keep the channel open for the async response
   });
+  browser.commands.onCommand.addListener((command) => { handleCommand(command); });
 });
