@@ -85,6 +85,7 @@ Tres componentes + almacenamiento local:
 ### 5.2 Popup — "el panel" (UI)
 - Al abrir, pide al service worker la lista de pestañas audibles + su estado y renderiza.
 - Envía comandos (mute, set-volume, request-permission) al service worker.
+- Mientras está abierto, se suscribe directamente a `chrome.tabs.onUpdated` / `onRemoved` (tiene acceso directo a la API) para mantener la lista viva sin re-abrir el panel.
 - Bundle deliberadamente pequeño (**Preact**) por confianza y rendimiento.
 
 ### 5.3 Content script — "volumen fino"

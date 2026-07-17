@@ -26,4 +26,22 @@ describe('App', () => {
     fireEvent.click(screen.getByText(/mute all/i));
     expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'muteAll' });
   });
+
+  it('refreshes the tab list live when a tab becomes audible while the popup is open', async () => {
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('Lofi'));
+
+    const listCalls = () =>
+      (fakeBrowser.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls.filter(
+        ([msg]: [{ type: string }]) => msg.type === 'list',
+      ).length;
+    expect(listCalls()).toBe(1);
+
+    // NOTE: the popup subscribes to `tabs.onUpdated` while it's open (see
+    // App.tsx mount effect) so the list stays live instead of only
+    // snapshotting once on mount.
+    await fakeBrowser.tabs.onUpdated.trigger(1, { audible: true }, {} as chrome.tabs.Tab);
+
+    await waitFor(() => expect(listCalls()).toBe(2));
+  });
 });

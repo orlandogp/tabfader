@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { browser } from 'wxt/browser';
 import type { AudibleTab } from '@/lib/types';
 import { sendToBackground } from '@/lib/messages';
 import { hasOriginPermission, requestOriginPermission } from '@/lib/permissions';
@@ -6,6 +7,12 @@ import { getSiteVolume } from '@/lib/storage';
 import { TabRow } from './components/TabRow';
 import { DonationFooter } from './components/DonationFooter';
 import './style.css';
+
+interface TabChangeInfo {
+  audible?: boolean;
+  mutedInfo?: unknown;
+  title?: string;
+}
 
 interface RowState { granted: boolean; volume: number }
 
@@ -26,7 +33,23 @@ export function App({ donateUrl }: { donateUrl: string }) {
     setRowState(entries);
   }
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    refresh();
+    // The popup page has direct chrome API access, so while it's open we keep
+    // the list live instead of only snapshotting it once on mount.
+    const onTabUpdated = (_tabId: number, changeInfo: TabChangeInfo) => {
+      if (changeInfo.audible !== undefined || changeInfo.mutedInfo !== undefined || changeInfo.title !== undefined) {
+        refresh();
+      }
+    };
+    const onTabRemoved = () => refresh();
+    browser.tabs.onUpdated.addListener(onTabUpdated);
+    browser.tabs.onRemoved.addListener(onTabRemoved);
+    return () => {
+      browser.tabs.onUpdated.removeListener(onTabUpdated);
+      browser.tabs.onRemoved.removeListener(onTabRemoved);
+    };
+  }, []);
 
   async function toggleMute(t: AudibleTab) {
     await sendToBackground({ type: 'toggleMute', tabId: t.id, muted: !t.muted });
