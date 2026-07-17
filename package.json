@@ -37,5 +37,8 @@
       "esbuild",
       "spawn-sync"
     ]
+  },
+  "engines": {
+    "node": ">=24"
   }
 }
