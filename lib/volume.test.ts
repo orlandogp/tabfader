@@ -7,6 +7,9 @@ describe('clampVolume', () => {
     expect(clampVolume(1.5)).toBe(1);
     expect(clampVolume(0.42)).toBe(0.42);
   });
+  it('returns DEFAULT_VOLUME for NaN', () => {
+    expect(clampVolume(NaN)).toBe(DEFAULT_VOLUME);
+  });
 });
 
 describe('percentToUnit / unitToPercent', () => {
@@ -17,6 +20,9 @@ describe('percentToUnit / unitToPercent', () => {
   it('clamps beyond bounds (no boost above 100%)', () => {
     expect(percentToUnit(150)).toBe(1);
     expect(unitToPercent(2)).toBe(100);
+  });
+  it('clamps negative percent to 0', () => {
+    expect(percentToUnit(-50)).toBe(0);
   });
 });
 
