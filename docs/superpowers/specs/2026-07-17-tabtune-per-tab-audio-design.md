@@ -37,7 +37,7 @@ Los navegadores basados en Chromium (incluido Edge con su barra de medios) expon
 ### Objetivos (v1)
 - Auto-detección en vivo de pestañas que reproducen audio, mostradas con nombre e ícono.
 - Silenciar / reactivar cualquier pestaña, gratis, instantáneo, sin permisos de host.
-- Botón "Silenciar todo".
+- Botón "Silenciar todo" (toggle: si ya está todo silenciado, ofrece "Reactivar todo" — pedido en prueba de campo).
 - Control de volumen fino 0–100% por sitio, con opt-in de permiso por sitio.
 - Memoria por sitio: el volumen sobrevive recargas y navegación dentro del mismo origen.
 - Atajo de teclado opcional para la pestaña activa.
@@ -53,7 +53,7 @@ Los navegadores basados en Chromium (incluido Edge con su barra de medios) expon
 ## 4. Comportamiento del producto
 
 ### Panel (popup del ícono de la barra)
-- **Encabezado:** logo + nombre + botón "🔇 Silenciar todo".
+- **Encabezado:** logo + nombre + botón "🔇 Silenciar todo" / "🔊 Reactivar todo" (toggle según estado).
 - **Sección "Sonando ahora":** lista solo las pestañas actualmente audibles, con ícono, título y dominio. Se actualiza en vivo.
 - **Por cada fila:**
   - Botón **mute/unmute** — siempre disponible, sin permisos.

@@ -26,6 +26,18 @@ describe('handleMessage', () => {
     expect(fakeBrowser.tabs.update).toHaveBeenCalledWith(5, { muted: true });
   });
 
+  it('muteAll applies the requested muted state to every audible tab', async () => {
+    fakeBrowser.tabs.query = vi.fn(async () => [
+      { id: 1, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: true } } as chrome.tabs.Tab,
+      { id: 2, url: 'https://b.com/y', title: 'B', audible: true, mutedInfo: { muted: true } } as chrome.tabs.Tab,
+    ]) as any;
+    fakeBrowser.tabs.update = vi.fn() as any;
+    // toggle semantics: the popup decides the target state; false = unmute all
+    await handleMessage({ type: 'muteAll', muted: false }, {} as any);
+    expect(fakeBrowser.tabs.update).toHaveBeenCalledWith(1, { muted: false });
+    expect(fakeBrowser.tabs.update).toHaveBeenCalledWith(2, { muted: false });
+  });
+
   it('setVolume persists the volume and messages the tab', async () => {
     // NOTE (resolution 5): vi.spyOn(fakeBrowser.tabs, 'sendMessage') fails because
     // fakeBrowser.tabs isn't a real method container to spy on — assign a vi.fn()

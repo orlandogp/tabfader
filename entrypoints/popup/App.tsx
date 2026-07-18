@@ -69,13 +69,20 @@ export function App({ donateUrl }: { donateUrl: string }) {
     await sendToBackground({ type: 'setVolume', tabId: t.id, origin: t.origin, volume });
   }
 
+  // Toggle target for the master button: if everything is already muted, the
+  // button flips to "Unmute all" (user-requested during field testing).
+  const allMuted = tabs.length > 0 && tabs.every((t) => t.muted);
+
   return (
     <div class="panel">
       <header class="header">
         <span class="logo">🎚️</span>
         <span class="name">TabTune</span>
-        <button class="all-mute" onClick={() => sendToBackground({ type: 'muteAll' }).then(refresh)}>
-          🔇 Mute all
+        <button
+          class="all-mute"
+          onClick={() => sendToBackground({ type: 'muteAll', muted: !allMuted }).then(refresh)}
+        >
+          {allMuted ? '🔊 Unmute all' : '🔇 Mute all'}
         </button>
       </header>
 

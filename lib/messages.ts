@@ -4,7 +4,7 @@ import type { AudibleTab } from './types';
 export type BackgroundMessage =
   | { type: 'list' }
   | { type: 'toggleMute'; tabId: number; muted: boolean }
-  | { type: 'muteAll' }
+  | { type: 'muteAll'; muted: boolean }
   | { type: 'setVolume'; tabId: number; origin: string; volume: number }
   | { type: 'grantSite'; tabId: number; origin: string };
 

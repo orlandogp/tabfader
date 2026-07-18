@@ -110,8 +110,10 @@ export async function handleMessage(
       await setTabMuted(msg.tabId, msg.muted);
       return;
     case 'muteAll': {
+      // Toggle semantics: the popup decides the target state (true = mute
+      // everything, false = unmute everything).
       const tabs = await queryAudibleTabs();
-      await Promise.all(tabs.map((t) => setTabMuted(t.id, true)));
+      await Promise.all(tabs.map((t) => setTabMuted(t.id, msg.muted)));
       return;
     }
     case 'setVolume':
