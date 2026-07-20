@@ -15,6 +15,41 @@ export function applyVolumeToMedia(root: ParentNode, volume: number): number {
   return media.length;
 }
 
+/** DOM event a fresh copy of this script dispatches so orphans know a successor exists. */
+export const ALIVE_EVENT = 'tabtune:alive';
+
+/**
+ * There is no browser event for extension uninstall, so an injected script
+ * must detect its own orphaning: poll `isAlive`; on death call `onOrphaned`
+ * (stop enforcing immediately), then wait `graceMs` for a successor script
+ * (extension UPDATE — leave everything to it). If none announces itself, the
+ * extension was UNINSTALLED: call `onUninstalled` (restore page defaults).
+ */
+export function watchExtensionLiveness(opts: {
+  isAlive: () => boolean;
+  onOrphaned: () => void;
+  onUninstalled: () => void;
+  successorEvents: EventTarget;
+  checkMs?: number;
+  graceMs?: number;
+}): void {
+  const { isAlive, onOrphaned, onUninstalled, successorEvents, checkMs = 5000, graceMs = 8000 } = opts;
+  let successorSeen = false;
+  successorEvents.addEventListener(ALIVE_EVENT, () => {
+    successorSeen = true;
+  });
+
+  const timer = setInterval(() => {
+    if (isAlive()) return;
+    clearInterval(timer);
+    onOrphaned();
+    if (successorSeen) return;
+    setTimeout(() => {
+      if (!successorSeen) onUninstalled();
+    }, graceMs);
+  }, checkMs);
+}
+
 export default defineContentScript({
   matches: [],               // no static matches — registered at runtime per granted origin
   registration: 'runtime',
@@ -34,6 +69,17 @@ export default defineContentScript({
     // the context when a newer copy starts (script-started handshake) — stop
     // enforcing the moment that happens.
     ctx.onInvalidated(() => observer.disconnect());
+
+    // Announce this copy to any orphaned predecessors, then self-monitor:
+    // if the extension dies and NO successor shows up (uninstall, not update),
+    // restore the default volume so the tab is left as if we were never here.
+    document.dispatchEvent(new CustomEvent(ALIVE_EVENT));
+    watchExtensionLiveness({
+      isAlive: () => Boolean(browser.runtime?.id),
+      onOrphaned: () => observer.disconnect(),
+      onUninstalled: () => applyVolumeToMedia(document, 1),
+      successorEvents: document,
+    });
 
     browser.runtime.onMessage.addListener((msg: ContentMessage) => {
       if (msg?.type === 'applyVolume') {
