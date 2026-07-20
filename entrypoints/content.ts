@@ -20,7 +20,7 @@ export default defineContentScript({
   registration: 'runtime',
   runAt: 'document_start',
   allFrames: true,
-  async main() {
+  async main(ctx) {
     const origin = originKeyFromUrl(location.href);
     let current = origin ? await getSiteVolume(origin) : 1;
 
@@ -28,6 +28,12 @@ export default defineContentScript({
 
     const observer = new MutationObserver(() => applyVolumeToMedia(document, current));
     observer.observe(document.documentElement, { childList: true, subtree: true });
+    // Extension reloads/updates orphan this script: its runtime channel dies
+    // but the observer would keep re-applying a stale volume forever, fighting
+    // the fresh script injected by the new extension version. WXT invalidates
+    // the context when a newer copy starts (script-started handshake) — stop
+    // enforcing the moment that happens.
+    ctx.onInvalidated(() => observer.disconnect());
 
     browser.runtime.onMessage.addListener((msg: ContentMessage) => {
       if (msg?.type === 'applyVolume') {

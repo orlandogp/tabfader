@@ -1,6 +1,6 @@
 {
   "name": "tabtune",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Trust-first per-tab audio control extension for Chromium browsers",
   "scripts": {
     "dev": "wxt",
