@@ -46,19 +46,13 @@ async function ensureContentScript(origin: string, tabId: number): Promise<void>
 
 // Extension updates/browser restarts drop `scripting.registerContentScripts`
 // registrations but NOT the granted host permissions, so on `onInstalled` we
-// re-derive the granted origins from `permissions.getAll` and re-register
-// their content scripts (registration only — no tab to inject into yet).
+// re-derive the granted origins from `permissions.getAll`, re-register their
+// content scripts AND re-inject into already-open matching tabs — the update
+// just orphaned any previously injected copies, and a fresh successor must
+// take over promptly (orphans that see no successor assume an uninstall and
+// restore the page's default volume).
 export async function reregisterGrantedOrigins(): Promise<void> {
-  const { origins = [] } = await browser.permissions.getAll();
-  for (const pattern of origins) {
-    const host = hostFromOriginPattern(pattern);
-    if (!host) continue;
-    try {
-      await registerOriginScript(host);
-    } catch {
-      /* one origin's registration failing shouldn't block the rest */
-    }
-  }
+  await handlePermissionsAdded(await browser.permissions.getAll());
 }
 
 // ROOT CAUSE FIX (field-confirmed bug): the native permission prompt steals
