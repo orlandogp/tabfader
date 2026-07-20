@@ -94,6 +94,47 @@ describe('handleMessage', () => {
   });
 });
 
+describe('zero-volume tabs stay listed', () => {
+  // FIELD BUG: dragging a site to 0% makes the tab non-audible, so it vanished
+  // from the list and the user had no slider left to raise it back. Tabs WE
+  // silenced must stay listed until the volume comes back up or the tab closes.
+  it('keeps a tab we zeroed in the list even when no longer audible', async () => {
+    fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
+    await handleMessage({ type: 'setVolume', tabId: 7, origin: 'a.com', volume: 0 }, {} as any);
+
+    fakeBrowser.tabs.query = vi.fn(async () => []) as any; // nothing audible anymore
+    fakeBrowser.tabs.get = vi.fn(async () => ({
+      id: 7, url: 'https://a.com/x', title: 'A', audible: false, mutedInfo: { muted: false },
+    } as chrome.tabs.Tab)) as any;
+
+    const res = await handleMessage({ type: 'list' }, {} as any);
+    expect(res).toEqual([
+      { id: 7, title: 'A', url: 'https://a.com/x', origin: 'a.com', favIconUrl: undefined, muted: false },
+    ]);
+  });
+
+  it('stops force-listing the tab once volume is raised again', async () => {
+    fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
+    await handleMessage({ type: 'setVolume', tabId: 7, origin: 'a.com', volume: 0 }, {} as any);
+    await handleMessage({ type: 'setVolume', tabId: 7, origin: 'a.com', volume: 0.5 }, {} as any);
+
+    fakeBrowser.tabs.query = vi.fn(async () => []) as any;
+    const res = await handleMessage({ type: 'list' }, {} as any);
+    expect(res).toEqual([]);
+  });
+
+  it('drops zeroed tabs that were closed or navigated away', async () => {
+    fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
+    await handleMessage({ type: 'setVolume', tabId: 7, origin: 'a.com', volume: 0 }, {} as any);
+
+    fakeBrowser.tabs.query = vi.fn(async () => []) as any;
+    fakeBrowser.tabs.get = vi.fn(async () => { throw new Error('No tab with id: 7'); }) as any;
+
+    const res = await handleMessage({ type: 'list' }, {} as any);
+    expect(res).toEqual([]);
+  });
+});
+
 describe('handlePermissionsAdded', () => {
   // ROOT CAUSE (field-confirmed): the native permission prompt steals focus and
   // CLOSES the popup, killing its JS — so the popup code after
