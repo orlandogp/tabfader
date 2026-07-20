@@ -134,7 +134,10 @@ export async function handleMessage(
           });
         }
       }
-      return [...audible, ...extras];
+      // Stable, category-independent order (tab creation order): rows must
+      // not jump between the audible and zero-volume groups while the user
+      // drags a slider and the `audible` flag flips live under their cursor.
+      return [...audible, ...extras].sort((a, b) => a.id - b.id);
     }
     case 'toggleMute':
       await setTabMuted(msg.tabId, msg.muted);
