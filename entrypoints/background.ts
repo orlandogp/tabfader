@@ -7,7 +7,7 @@ import { browser } from 'wxt/browser';
 import type { BackgroundMessage, BackgroundResponse } from '@/lib/messages';
 import type { AudibleTab } from '@/lib/types';
 import { queryAudibleTabs, setTabMuted } from '@/lib/audible-tabs';
-import { getSiteVolume, setSiteVolume, setTabZeroed, getZeroedTabs } from '@/lib/storage';
+import { getSiteVolume, setSiteVolume } from '@/lib/storage';
 import { hasOriginPermission } from '@/lib/permissions';
 import { matchPatternForOrigin, originKeyFromUrl } from '@/lib/origin';
 
@@ -107,29 +107,31 @@ export async function handleMessage(
   switch (msg.type) {
     case 'list': {
       const audible = await queryAudibleTabs();
-      // Also list the tabs WE dragged to 0% — they are no longer `audible`,
-      // but dropping them would strand the user with no slider to raise them.
+      // Volume is stored PER ORIGIN, so a site left at 0% silences every tab
+      // of that origin — none of them is ever `audible`, and dropping them
+      // from the list would strand the user with no slider to recover. List
+      // every open tab of any granted origin whose stored volume is 0.
+      // Queried live (permissions + storage): self-healing, no tracking state.
       const extras: AudibleTab[] = [];
-      for (const [tabIdStr, origin] of Object.entries(await getZeroedTabs())) {
-        const tabId = Number(tabIdStr);
-        if (audible.some((t) => t.id === tabId)) continue;
-        try {
-          const tab = await browser.tabs.get(tabId);
-          const tabOrigin = tab.url ? originKeyFromUrl(tab.url) : null;
-          if (tab.id == null || tabOrigin !== origin) {
-            await setTabZeroed(tabId, origin, false); // navigated away
-            continue;
-          }
+      const { origins = [] } = await browser.permissions.getAll();
+      for (const pattern of origins) {
+        const host = hostFromOriginPattern(pattern);
+        if (!host) continue;
+        if ((await getSiteVolume(host)) > 0) continue;
+        const tabs = await browser.tabs.query({ url: pattern });
+        for (const tab of tabs) {
+          if (tab.id == null || !tab.url) continue;
+          if (audible.some((t) => t.id === tab.id)) continue;
+          const tabOrigin = originKeyFromUrl(tab.url);
+          if (tabOrigin !== host) continue;
           extras.push({
             id: tab.id,
             title: tab.title ?? tabOrigin,
-            url: tab.url!,
+            url: tab.url,
             origin: tabOrigin,
             favIconUrl: tab.favIconUrl,
             muted: tab.mutedInfo?.muted ?? false,
           });
-        } catch {
-          await setTabZeroed(tabId, origin, false); // tab closed
         }
       }
       return [...audible, ...extras];
@@ -146,7 +148,6 @@ export async function handleMessage(
     }
     case 'setVolume':
       await setSiteVolume(msg.origin, msg.volume);
-      await setTabZeroed(msg.tabId, msg.origin, msg.volume === 0);
       await browser.tabs.sendMessage(msg.tabId, { type: 'applyVolume', volume: msg.volume }).catch(() => {});
       return;
     case 'grantSite': {

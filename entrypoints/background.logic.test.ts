@@ -7,6 +7,9 @@ describe('handleMessage', () => {
     // NOTE (resolution 2): fakeBrowser methods are plain functions, not vitest mocks —
     // `.mockImplementation` doesn't exist on them. Assign a `vi.fn()` directly instead
     // (established in Tasks 6-8, e.g. lib/audible-tabs.test.ts).
+    // fake-browser has no permissions.getAll implementation — the list handler
+    // sweeps granted origins for zero-volume sites, so stub it empty here.
+    fakeBrowser.permissions.getAll = vi.fn(async () => ({ origins: [], permissions: [] })) as any;
     fakeBrowser.tabs.query = vi.fn(async () => [
       { id: 3, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: false } } as chrome.tabs.Tab,
     ]) as any;
@@ -94,44 +97,59 @@ describe('handleMessage', () => {
   });
 });
 
-describe('zero-volume tabs stay listed', () => {
-  // FIELD BUG: dragging a site to 0% makes the tab non-audible, so it vanished
-  // from the list and the user had no slider left to raise it back. Tabs WE
-  // silenced must stay listed until the volume comes back up or the tab closes.
-  it('keeps a tab we zeroed in the list even when no longer audible', async () => {
-    fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
-    await handleMessage({ type: 'setVolume', tabId: 7, origin: 'a.com', volume: 0 }, {} as any);
-
-    fakeBrowser.tabs.query = vi.fn(async () => []) as any; // nothing audible anymore
-    fakeBrowser.tabs.get = vi.fn(async () => ({
-      id: 7, url: 'https://a.com/x', title: 'A', audible: false, mutedInfo: { muted: false },
-    } as chrome.tabs.Tab)) as any;
+describe('zero-volume origins stay listed', () => {
+  // FIELD BUG (round 2): volume is stored PER ORIGIN, so a site left at 0%
+  // silences every present and future tab of that origin — none of them ever
+  // becomes `audible`, so none would be listed and there'd be no slider to
+  // recover. The list must therefore include every open tab of any granted
+  // origin whose stored volume is 0. Queried live from storage + permissions:
+  // self-healing, needs no per-tab tracking or migration.
+  it('lists open tabs of a granted origin stored at 0% even when silent', async () => {
+    const { setSiteVolume } = await import('@/lib/storage');
+    await setSiteVolume('a.com', 0);
+    fakeBrowser.permissions.getAll = vi.fn(async () => ({
+      origins: ['*://a.com/*'],
+      permissions: [],
+    })) as any;
+    fakeBrowser.tabs.query = vi.fn(async (q: any) =>
+      q?.audible ? [] : [{ id: 7, url: 'https://a.com/x', title: 'A', mutedInfo: { muted: false } } as chrome.tabs.Tab],
+    ) as any;
 
     const res = await handleMessage({ type: 'list' }, {} as any);
     expect(res).toEqual([
       { id: 7, title: 'A', url: 'https://a.com/x', origin: 'a.com', favIconUrl: undefined, muted: false },
     ]);
+    expect(fakeBrowser.tabs.query).toHaveBeenCalledWith({ url: '*://a.com/*' });
   });
 
-  it('stops force-listing the tab once volume is raised again', async () => {
-    fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
-    await handleMessage({ type: 'setVolume', tabId: 7, origin: 'a.com', volume: 0 }, {} as any);
-    await handleMessage({ type: 'setVolume', tabId: 7, origin: 'a.com', volume: 0.5 }, {} as any);
-
+  it('does not force-list the origin once its volume is above 0', async () => {
+    const { setSiteVolume } = await import('@/lib/storage');
+    await setSiteVolume('a.com', 0.5);
+    fakeBrowser.permissions.getAll = vi.fn(async () => ({
+      origins: ['*://a.com/*'],
+      permissions: [],
+    })) as any;
     fakeBrowser.tabs.query = vi.fn(async () => []) as any;
-    const res = await handleMessage({ type: 'list' }, {} as any);
-    expect(res).toEqual([]);
-  });
-
-  it('drops zeroed tabs that were closed or navigated away', async () => {
-    fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
-    await handleMessage({ type: 'setVolume', tabId: 7, origin: 'a.com', volume: 0 }, {} as any);
-
-    fakeBrowser.tabs.query = vi.fn(async () => []) as any;
-    fakeBrowser.tabs.get = vi.fn(async () => { throw new Error('No tab with id: 7'); }) as any;
 
     const res = await handleMessage({ type: 'list' }, {} as any);
     expect(res).toEqual([]);
+    // only the audible query ran — no per-origin tab sweep
+    expect(fakeBrowser.tabs.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not duplicate a tab that is both audible and on a zeroed origin', async () => {
+    const { setSiteVolume } = await import('@/lib/storage');
+    await setSiteVolume('a.com', 0);
+    fakeBrowser.permissions.getAll = vi.fn(async () => ({
+      origins: ['*://a.com/*'],
+      permissions: [],
+    })) as any;
+    fakeBrowser.tabs.query = vi.fn(async (q: any) => [
+      { id: 7, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: false } } as chrome.tabs.Tab,
+    ]) as any;
+
+    const res = (await handleMessage({ type: 'list' }, {} as any)) as unknown[];
+    expect(res).toHaveLength(1);
   });
 });
 
