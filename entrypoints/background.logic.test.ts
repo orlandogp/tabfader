@@ -167,6 +167,29 @@ describe('zero-volume origins stay listed', () => {
     expect(fakeBrowser.tabs.query).toHaveBeenCalledTimes(1);
   });
 
+  it('returns a stable order (by tab id) regardless of audible/zeroed category', async () => {
+    // FIELD BUG (round 5): rows jumped between the audible block and the
+    // appended zero-volume block while dragging the slider (audible flips
+    // live), making the knob move under the cursor. Order must be stable and
+    // category-independent: tab creation order (id).
+    const { setSiteVolume } = await import('@/lib/storage');
+    await setSiteVolume('a.com', 0);
+    fakeBrowser.permissions.getAll = vi.fn(async () => ({
+      origins: ['*://a.com/*'],
+      permissions: [],
+    })) as any;
+    fakeBrowser.tabs.query = vi.fn(async (q: any) =>
+      q?.audible
+        ? [{ id: 9, url: 'https://b.com/y', title: 'B', audible: true, mutedInfo: { muted: false } } as chrome.tabs.Tab]
+        : [{ id: 3, url: 'https://a.com/x', title: 'A', mutedInfo: { muted: false } } as chrome.tabs.Tab],
+    ) as any;
+
+    const res = (await handleMessage({ type: 'list' }, {} as any)) as Array<{ id: number }>;
+    // the zeroed a.com tab (id 3) was created before the audible b.com tab
+    // (id 9), so it must come FIRST even though it is not audible.
+    expect(res.map((t) => t.id)).toEqual([3, 9]);
+  });
+
   it('does not duplicate a tab that is both audible and on a zeroed origin', async () => {
     const { setSiteVolume } = await import('@/lib/storage');
     await setSiteVolume('a.com', 0);
