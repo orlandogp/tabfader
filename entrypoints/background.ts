@@ -148,7 +148,23 @@ export async function handleMessage(
     }
     case 'setVolume':
       await setSiteVolume(msg.origin, msg.volume);
-      await browser.tabs.sendMessage(msg.tabId, { type: 'applyVolume', volume: msg.volume }).catch(() => {});
+      try {
+        await browser.tabs.sendMessage(msg.tabId, { type: 'applyVolume', volume: msg.volume });
+      } catch {
+        // No live listener in the tab: the script was never injected there, or
+        // an extension reload/update ORPHANED it (its message channel dies but
+        // its MutationObserver keeps enforcing the stale volume). Inject a
+        // fresh script now — it applies the just-stored volume on startup and
+        // WXT's script-started handshake retires the orphan.
+        try {
+          await browser.scripting.executeScript({
+            target: { tabId: msg.tabId, allFrames: true },
+            files: [CONTENT_JS],
+          });
+        } catch {
+          /* restricted page or discarded tab — mute still works there */
+        }
+      }
       return;
     case 'grantSite': {
       // NOTE: the popup already called `requestOriginPermission` under the

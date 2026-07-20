@@ -46,10 +46,40 @@ describe('handleMessage', () => {
     // fakeBrowser.tabs isn't a real method container to spy on — assign a vi.fn()
     // directly instead.
     fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
+    (fakeBrowser as any).scripting = {
+      registerContentScripts: vi.fn(async () => undefined),
+      unregisterContentScripts: vi.fn(async () => undefined),
+      executeScript: vi.fn(async () => [] as any),
+    };
     await handleMessage({ type: 'setVolume', tabId: 9, origin: 'a.com', volume: 0.5 }, {} as any);
     const { getSiteVolume } = await import('@/lib/storage');
     expect(await getSiteVolume('a.com')).toBe(0.5);
     expect(fakeBrowser.tabs.sendMessage).toHaveBeenCalledWith(9, { type: 'applyVolume', volume: 0.5 });
+    // delivery succeeded -> no need to re-inject
+    expect((fakeBrowser as any).scripting.executeScript).not.toHaveBeenCalled();
+  });
+
+  it('setVolume re-injects the content script when delivery fails', async () => {
+    // FIELD BUG (round 4): extension reloads/updates ORPHAN injected content
+    // scripts — their message listener dies, so applyVolume was silently
+    // swallowed while storage said "all good". Delivery must be verified and
+    // recovered: on failure, inject the script now (we hold the permission);
+    // the fresh script applies the just-stored volume on startup.
+    fakeBrowser.tabs.sendMessage = vi.fn(async () => {
+      throw new Error('Could not establish connection. Receiving end does not exist.');
+    }) as any;
+    (fakeBrowser as any).scripting = {
+      registerContentScripts: vi.fn(async () => undefined),
+      unregisterContentScripts: vi.fn(async () => undefined),
+      executeScript: vi.fn(async () => [] as any),
+    };
+    await handleMessage({ type: 'setVolume', tabId: 9, origin: 'a.com', volume: 1 }, {} as any);
+    const { getSiteVolume } = await import('@/lib/storage');
+    expect(await getSiteVolume('a.com')).toBe(1);
+    expect((fakeBrowser as any).scripting.executeScript).toHaveBeenCalledWith({
+      target: { tabId: 9, allFrames: true },
+      files: ['content-scripts/content.js'],
+    });
   });
 
   it('grantSite confirms the already-granted permission and reports the result', async () => {
