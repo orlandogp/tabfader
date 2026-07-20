@@ -146,6 +146,7 @@ Descartados: **CRXJS** (mantenimiento estancado 2025–2026) y **Plasmo** (super
 | Sitio con DRM | `.volume` atenúa/silencia normal; sin boost (que de todos modos no existe en v1). |
 | iframe de otro origen con media | Inyección `all_frames` best-effort; si falla, mute de toda la pestaña sigue disponible. |
 | Pestaña cerrada o deja de sonar | Se retira de la lista (`onRemoved` / `onUpdated`). |
+| Volumen bajado a 0% por TabTune | La pestaña deja de ser "audible" para el navegador, pero **permanece en la lista** (rastreada en `storage.session` como enmudecida-por-nosotros) hasta que se le suba el volumen, navegue a otro origen o se cierre — si no, el usuario perdería el slider para revivirla (bug hallado en prueba de campo). |
 | Service worker suspendido (MV3) | Estado persistido en `storage`; se reconstruye al despertar por evento. |
 
 ## 9. Confianza y monetización

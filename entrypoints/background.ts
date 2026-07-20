@@ -5,10 +5,11 @@
 import { defineBackground } from '#imports';
 import { browser } from 'wxt/browser';
 import type { BackgroundMessage, BackgroundResponse } from '@/lib/messages';
+import type { AudibleTab } from '@/lib/types';
 import { queryAudibleTabs, setTabMuted } from '@/lib/audible-tabs';
-import { getSiteVolume, setSiteVolume } from '@/lib/storage';
+import { getSiteVolume, setSiteVolume, setTabZeroed, getZeroedTabs } from '@/lib/storage';
 import { hasOriginPermission } from '@/lib/permissions';
-import { matchPatternForOrigin } from '@/lib/origin';
+import { matchPatternForOrigin, originKeyFromUrl } from '@/lib/origin';
 
 const CONTENT_JS = 'content-scripts/content.js';
 
@@ -104,8 +105,35 @@ export async function handleMessage(
   _sender: chrome.runtime.MessageSender,
 ): Promise<BackgroundResponse> {
   switch (msg.type) {
-    case 'list':
-      return queryAudibleTabs();
+    case 'list': {
+      const audible = await queryAudibleTabs();
+      // Also list the tabs WE dragged to 0% — they are no longer `audible`,
+      // but dropping them would strand the user with no slider to raise them.
+      const extras: AudibleTab[] = [];
+      for (const [tabIdStr, origin] of Object.entries(await getZeroedTabs())) {
+        const tabId = Number(tabIdStr);
+        if (audible.some((t) => t.id === tabId)) continue;
+        try {
+          const tab = await browser.tabs.get(tabId);
+          const tabOrigin = tab.url ? originKeyFromUrl(tab.url) : null;
+          if (tab.id == null || tabOrigin !== origin) {
+            await setTabZeroed(tabId, origin, false); // navigated away
+            continue;
+          }
+          extras.push({
+            id: tab.id,
+            title: tab.title ?? tabOrigin,
+            url: tab.url!,
+            origin: tabOrigin,
+            favIconUrl: tab.favIconUrl,
+            muted: tab.mutedInfo?.muted ?? false,
+          });
+        } catch {
+          await setTabZeroed(tabId, origin, false); // tab closed
+        }
+      }
+      return [...audible, ...extras];
+    }
     case 'toggleMute':
       await setTabMuted(msg.tabId, msg.muted);
       return;
@@ -118,6 +146,7 @@ export async function handleMessage(
     }
     case 'setVolume':
       await setSiteVolume(msg.origin, msg.volume);
+      await setTabZeroed(msg.tabId, msg.origin, msg.volume === 0);
       await browser.tabs.sendMessage(msg.tabId, { type: 'applyVolume', volume: msg.volume }).catch(() => {});
       return;
     case 'grantSite': {
