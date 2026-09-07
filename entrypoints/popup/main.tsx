@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import { App } from './App';
 
-const DONATE_URL = 'https://ko-fi.com/tabtune'; // TODO(owner): replace with real donation URL before publishing
+const DONATE_URL = 'https://buymeacoffee.com/orlandogomez';
 
 render(<App donateUrl={DONATE_URL} />, document.getElementById('app')!);
