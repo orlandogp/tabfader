@@ -6,6 +6,7 @@ import { hasOriginPermission, requestOriginPermission } from '@/lib/permissions'
 import { getSiteVolume } from '@/lib/storage';
 import { TabRow } from './components/TabRow';
 import { DonationFooter } from './components/DonationFooter';
+import { FaderMark } from './components/FaderMark';
 import './style.css';
 
 interface TabChangeInfo {
@@ -76,7 +77,7 @@ export function App({ donateUrl }: { donateUrl: string }) {
   return (
     <div class="panel">
       <header class="header">
-        <span class="logo">🎚️</span>
+        <FaderMark size={18} />
         <span class="name">TabFader</span>
         <button
           class="all-mute"
