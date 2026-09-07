@@ -1,4 +1,4 @@
-# TabTune
+# TabFader
 
 Per-tab audio control for Chromium browsers. Auto-detects tabs that are playing
 sound, lets you mute any of them for free, and gives fine 0–100% volume per site
@@ -22,7 +22,7 @@ via an opt-in permission. 100% local — no telemetry, no affiliates, open sourc
 
 ## Known limitation
 Widevine-DRM audio (Netflix, Disney+, Prime Video) can be muted/attenuated but
-**not boosted** — this is a browser-level restriction, not a TabTune bug.
+**not boosted** — this is a browser-level restriction, not a TabFader bug.
 
 ## License
 MIT

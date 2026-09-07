@@ -73,7 +73,7 @@ describe('watchExtensionLiveness', () => {
     expect(onOrphaned).toHaveBeenCalledTimes(1);
 
     // a fresh copy (extension update) announces itself during the grace window
-    document.dispatchEvent(new CustomEvent('tabtune:alive'));
+    document.dispatchEvent(new CustomEvent('tabfader:alive'));
     vi.advanceTimersByTime(10_000);
     expect(onUninstalled).not.toHaveBeenCalled();
   });

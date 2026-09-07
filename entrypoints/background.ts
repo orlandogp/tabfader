@@ -21,7 +21,7 @@ function hostFromOriginPattern(pattern: string): string | null {
 }
 
 async function registerOriginScript(origin: string): Promise<void> {
-  const id = `tabtune-${origin}`;
+  const id = `tabfader-${origin}`;
   const pattern = matchPatternForOrigin(origin);
   // Register for future loads (idempotent: unregister-if-exists then register).
   try {
