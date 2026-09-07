@@ -50,4 +50,4 @@ date above. The extension keeps working the same way: local only.
 
 ## Contact
 
-Open an issue in this repository.
+Open an issue at https://github.com/orlandogp/tabfader/issues.
