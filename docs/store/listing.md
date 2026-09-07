@@ -4,8 +4,6 @@ Submission copy for the developer dashboard. Paste each block into the matching 
 Name and summary are read from the manifest (`wxt.config.ts`); everything else is typed
 into the dashboard by hand.
 
-Placeholders to fill once the GitHub repository exists: `<REPO_URL>`.
-
 ## Package
 
 ```
@@ -22,8 +20,8 @@ The version comes from `package.json`.
 | Summary  | Per-tab audio control: see what's playing, mute any tab, set a volume per site. 100% local, no tracking. (manifest) |
 | Category | Accessibility                                                                                               |
 | Language | English                                                                                                     |
-| Homepage | `<REPO_URL>`                                                                                                |
-| Support  | `<REPO_URL>/issues`                                                                                         |
+| Homepage | `https://github.com/orlandogp/tabfader`                                                                                                |
+| Support  | `https://github.com/orlandogp/tabfader/issues`                                                                                         |
 
 ### Detailed description
 
@@ -42,7 +40,7 @@ WHAT IT DOES
 BUILT ON TRUST
 • 100% local. Nothing leaves your browser: no servers, no analytics, no accounts, no affiliate links.
 • Minimal permissions. Muting works without access to any website. Volume control is unlocked one site at a time, only when you ask for it, and you can revoke it from Chrome at any time.
-• Open source. The full code is public so anyone can verify what it does: <REPO_URL>
+• Open source. The full code is public so anyone can verify what it does: https://github.com/orlandogp/tabfader
 • Free, supported by optional donations.
 
 HONEST LIMITS
@@ -124,7 +122,7 @@ Certifications (check all three):
 - I do not use or transfer user data for purposes that are unrelated to my item's single purpose.
 - I do not use or transfer user data to determine creditworthiness or for lending purposes.
 
-Privacy policy URL: `<REPO_URL>/blob/main/PRIVACY.md`
+Privacy policy URL: `https://github.com/orlandogp/tabfader/blob/main/PRIVACY.md`
 
 ## Distribution tab
 

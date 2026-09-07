@@ -27,6 +27,7 @@ export default defineConfig({
   // automation can accept. `pnpm zip` builds in production mode and never includes it.
   manifest: ({ mode }) => ({
     name: 'TabFader',
+    homepage_url: 'https://github.com/orlandogp/tabfader',
     description: "Per-tab audio control: see what's playing, mute any tab, set a volume per site. 100% local, no tracking.",
     permissions: ['tabs', 'storage', 'scripting'],
     optional_host_permissions: ['*://*/*'],

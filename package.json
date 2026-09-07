@@ -18,6 +18,12 @@
   },
   "author": "orlandogp",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/orlandogp/tabfader.git"
+  },
+  "homepage": "https://github.com/orlandogp/tabfader#readme",
+  "bugs": "https://github.com/orlandogp/tabfader/issues",
   "packageManager": "pnpm@10.33.0",
   "type": "module",
   "dependencies": {
