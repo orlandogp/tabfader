@@ -16,7 +16,7 @@ The version comes from `package.json`.
 
 | Field    | Value                                                                                                       |
 | -------- | ----------------------------------------------------------------------------------------------------------- |
-| Name     | TabFader (manifest)                                                                                         |
+| Name     | TabFader: Per-Tab Volume Control (manifest; `short_name` stays TabFader)                                    |
 | Summary  | Per-tab audio control: see what's playing, mute any tab, set a volume per site. 100% local, no tracking. (manifest) |
 | Category | Accessibility                                                                                               |
 | Language | English                                                                                                     |

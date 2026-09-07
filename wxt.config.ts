@@ -26,7 +26,8 @@ export default defineConfig({
   // volume slider without clicking through Chrome's native permission prompt, which no
   // automation can accept. `pnpm zip` builds in production mode and never includes it.
   manifest: ({ mode }) => ({
-    name: 'TabFader',
+    name: 'TabFader: Per-Tab Volume Control',
+    short_name: 'TabFader',
     homepage_url: 'https://github.com/orlandogp/tabfader',
     description: "Per-tab audio control: see what's playing, mute any tab, set a volume per site. 100% local, no tracking.",
     permissions: ['tabs', 'storage', 'scripting'],
