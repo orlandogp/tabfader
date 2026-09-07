@@ -4,7 +4,7 @@
 // audio, captures the actual popup at 2x, and composes each capture onto a
 // 1280x800 canvas for the Chrome Web Store.
 //
-//   opt-in   normal build: rows show the "Control volume here" button -> screenshots 1 and 2
+//   opt-in   normal build: rows show the "Control volume here" button -> screenshots 1, 2 and 4 (dark scheme)
 //   granted  `wxt build --mode screenshots` (host permission pre-granted): rows show sliders -> screenshot 3
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -61,6 +61,17 @@ const SHOTS = {
       prepare: async (popup) => {
         await popup.locator('.tab-row .mute').first().click();
         await popup.getByText(/muted/i).first().waitFor({ timeout: 5_000 });
+      },
+    },
+    {
+      file: 'screenshot-4.png',
+      headline: 'Light or dark, like your browser.',
+      sub: 'TabFader follows your browser theme. Nothing to configure.',
+      prepare: async (popup) => {
+        // Undo the mute from the previous shot, then render the popup in the dark scheme.
+        await popup.locator('.tab-row .mute').first().click();
+        await popup.getByText(/muted/i).first().waitFor({ state: 'detached', timeout: 5_000 });
+        await popup.emulateMedia({ colorScheme: 'dark' });
       },
     },
   ],
