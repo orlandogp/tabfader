@@ -1,22 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { PNG_COLOR_TYPE_RGBA, PNG_SIGNATURE, readPngHeader } from '../test/png-header';
 import { renderIconPngs } from './render-icons.mjs';
 
 const SQUARE_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="4" fill="#2f6fed"/></svg>';
-
-const PNG_SIGNATURE = '89504e470d0a1a0a';
-const PNG_COLOR_TYPE_RGBA = 6;
-
-function readPngHeader(png: Uint8Array) {
-  const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
-  return {
-    signature: Buffer.from(png.subarray(0, 8)).toString('hex'),
-    width: view.getUint32(16),
-    height: view.getUint32(20),
-    colorType: png[25],
-  };
-}
 
 describe('renderIconPngs', () => {
   it('renders one RGBA png per requested size at exact pixel dimensions', async () => {

@@ -7,6 +7,8 @@
     "build": "wxt build",
     "zip": "wxt zip",
     "icons": "node scripts/generate-icons.mjs",
+    "store:graphics": "node scripts/generate-store-graphics.mjs",
+    "store:screenshots": "wxt build && node scripts/generate-store-screenshots.mjs opt-in && wxt build --mode screenshots && node scripts/generate-store-screenshots.mjs granted",
     "postinstall": "wxt prepare",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",

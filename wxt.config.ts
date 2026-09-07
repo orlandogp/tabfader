@@ -22,9 +22,12 @@ export default defineConfig({
       }
     },
   },
-  manifest: {
+  // NOTE: `--mode screenshots` pre-grants site access so the store screenshots can show the
+  // volume slider without clicking through Chrome's native permission prompt, which no
+  // automation can accept. `pnpm zip` builds in production mode and never includes it.
+  manifest: ({ mode }) => ({
     name: 'TabFader',
-    description: 'Per-tab audio control: auto-detect, mute, and fine volume per site. 100% local.',
+    description: "Per-tab audio control: see what's playing, mute any tab, set a volume per site. 100% local, no tracking.",
     permissions: ['tabs', 'storage', 'scripting'],
     optional_host_permissions: ['*://*/*'],
     action: {
@@ -39,5 +42,6 @@ export default defineConfig({
         description: 'Mute/unmute the active tab',
       },
     },
-  },
+    ...(mode === 'screenshots' ? { host_permissions: ['*://*/*'] } : {}),
+  }),
 });
