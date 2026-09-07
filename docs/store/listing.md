@@ -36,6 +36,7 @@ WHAT IT DOES
 • Mute all / Unmute all: silence everything and bring it back with one button.
 • Per-site volume: set a level from 0% to 100% for a site, and TabFader remembers it the next time you open that site.
 • Keyboard shortcut: Alt+Shift+M mutes or unmutes the active tab.
+• Follows your browser's light or dark theme. Nothing to configure.
 
 BUILT ON TRUST
 • 100% local. Nothing leaves your browser: no servers, no analytics, no accounts, no affiliate links.
@@ -63,12 +64,13 @@ Generated files live in this folder.
   actual popup at 2× and composes each capture on a 1280×800 canvas. Screenshot 3 uses
   `wxt build --mode screenshots`, which pre-grants site access so the slider can be shown
   without Chrome's native permission prompt. That build lands in
-  `.output/chrome-mv3-screenshots` and is never zipped.
+  `.output/chrome-mv3-screenshots` and is never zipped. Screenshot 4 emulates the dark
+  color scheme on the popup page.
 
 | Asset            | File                        | Size      | Notes                                                        |
 | ---------------- | --------------------------- | --------- | ------------------------------------------------------------ |
 | Store icon       | `icon-128.png`              | 128×128   | 96 px artwork with 16 px transparent padding, per CWS guide  |
-| Screenshots      | `screenshot-1.png` … `-3.png` | 1280×800 | Real popup captured at 2× and composed on a branded canvas  |
+| Screenshots      | `screenshot-1.png` … `-4.png` | 1280×800 | Real popup captured at 2× and composed on a branded canvas; 4 is the dark scheme |
 | Small promo tile | `promo-440x280.png`         | 440×280   | Required                                                     |
 | Marquee tile     | `marquee-1400x560.png`      | 1400×560  | Optional                                                     |
 
