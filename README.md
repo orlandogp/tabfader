@@ -9,6 +9,8 @@ via an opt-in permission. 100% local — no telemetry, no affiliates, open sourc
 - `pnpm test` — unit + component tests
 - `pnpm e2e` — Playwright end-to-end
 - `pnpm build` / `pnpm zip` — production build / store zip
+- `pnpm icons` — regenerate the extension icons from `assets/icon.svg`
+- `pnpm store:graphics` / `pnpm store:screenshots` — Chrome Web Store assets into `docs/store/`
 
 ## Install unpacked
 1. `pnpm build`
@@ -19,6 +21,8 @@ via an opt-in permission. 100% local — no telemetry, no affiliates, open sourc
 - `tabs` — to show which tabs are playing sound (their title/icon). Shown at
   install as "Read your browsing history". Nothing leaves your machine.
 - Host access is requested **per site, only when you unlock fine volume there**.
+
+Full details in [PRIVACY.md](PRIVACY.md).
 
 ## Known limitation
 Widevine-DRM audio (Netflix, Disney+, Prime Video) can be muted/attenuated but
