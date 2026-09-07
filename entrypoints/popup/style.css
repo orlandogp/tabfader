@@ -9,7 +9,7 @@
 .meta { flex: 1; min-width: 0; }
 .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .origin { font-size: 11px; opacity: .55; }
-.unlock { margin-top: 6px; font-size: 12px; padding: 5px 10px; border-radius: 8px; border: 1px dashed #5b9dff88; color: #5b9dff; background: #5b9dff10; cursor: pointer; }
+.unlock { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; padding: 5px 10px; border-radius: 8px; border: 1px dashed #5b9dff88; color: #5b9dff; background: #5b9dff10; cursor: pointer; }
 .mute { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; border: 1px solid #8886; background: transparent; cursor: pointer; }
 .footer { padding: 10px; border-top: 1px solid #8883; text-align: center; }
 .trust { font-size: 11px; opacity: .6; }
@@ -18,3 +18,4 @@ input[type=range] { width: 100%; margin-top: 6px; }
 .volume-slider { display: flex; align-items: center; gap: 8px; }
 .volume-slider input[type=range] { flex: 1; }
 .volume-slider .pct { font-size: 11px; opacity: .6; width: 34px; text-align: right; flex: 0 0 auto; }
+.fader-mark { display: block; flex: 0 0 auto; }

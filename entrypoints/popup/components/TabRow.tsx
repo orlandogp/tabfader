@@ -1,4 +1,5 @@
 import type { AudibleTab } from '@/lib/types';
+import { FaderMark } from './FaderMark';
 import { VolumeSlider } from './VolumeSlider';
 
 interface Props {
@@ -19,7 +20,11 @@ export function TabRow({ tab, granted, volume, onToggleMute, onUnlock, onVolume 
         <div class="origin">{tab.origin}{tab.muted ? ' · muted' : ''}</div>
         {granted
           ? <VolumeSlider value={volume} onChange={onVolume} />
-          : <button class="unlock" onClick={onUnlock}>🎚️ Control volume here →</button>}
+          : (
+            <button class="unlock" onClick={onUnlock}>
+              <FaderMark variant="glyph" size={12} /> Control volume here →
+            </button>
+          )}
       </div>
       <button class="mute" aria-label={tab.muted ? 'Unmute' : 'Mute'} onClick={onToggleMute}>
         {tab.muted ? '🔇' : '🔊'}
