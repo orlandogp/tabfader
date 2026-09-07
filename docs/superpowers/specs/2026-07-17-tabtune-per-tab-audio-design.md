@@ -2,7 +2,7 @@
 
 - **Fecha:** 2026-07-17
 - **Estado:** Diseño aprobado (pendiente revisión final del spec)
-- **Nombre de trabajo:** TabTune *(placeholder; el nombre definitivo es una decisión aparte)*
+- **Nombre de trabajo:** TabTune *(renombrado a **TabFader** el 2026-09-07; los archivos conservan el slug original)*
 - **Plataformas objetivo:** Chrome, Edge, Brave, Opera, Vivaldi (navegadores Chromium, Manifest V3)
 
 ---

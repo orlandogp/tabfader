@@ -100,7 +100,7 @@ describe('handleMessage', () => {
     expect(fakeBrowser.permissions.contains).toHaveBeenCalledWith({ origins: ['*://a.com/*'] });
     expect((fakeBrowser as any).scripting.registerContentScripts).toHaveBeenCalledWith([
       {
-        id: 'tabtune-a.com',
+        id: 'tabfader-a.com',
         js: ['content-scripts/content.js'],
         matches: ['*://a.com/*'],
         runAt: 'document_start',
@@ -227,7 +227,7 @@ describe('handlePermissionsAdded', () => {
 
     expect((fakeBrowser as any).scripting.registerContentScripts).toHaveBeenCalledWith([
       {
-        id: 'tabtune-a.com',
+        id: 'tabfader-a.com',
         js: ['content-scripts/content.js'],
         matches: ['*://a.com/*'],
         runAt: 'document_start',
@@ -270,7 +270,7 @@ describe('reregisterGrantedOrigins', () => {
     await reregisterGrantedOrigins();
     expect((fakeBrowser as any).scripting.registerContentScripts).toHaveBeenCalledWith([
       {
-        id: 'tabtune-youtube.com',
+        id: 'tabfader-youtube.com',
         js: ['content-scripts/content.js'],
         matches: ['*://youtube.com/*'],
         runAt: 'document_start',

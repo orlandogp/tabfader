@@ -77,7 +77,7 @@ export function App({ donateUrl }: { donateUrl: string }) {
     <div class="panel">
       <header class="header">
         <span class="logo">🎚️</span>
-        <span class="name">TabTune</span>
+        <span class="name">TabFader</span>
         <button
           class="all-mute"
           onClick={() => sendToBackground({ type: 'muteAll', muted: !allMuted }).then(refresh)}

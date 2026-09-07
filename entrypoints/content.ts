@@ -16,7 +16,7 @@ export function applyVolumeToMedia(root: ParentNode, volume: number): number {
 }
 
 /** DOM event a fresh copy of this script dispatches so orphans know a successor exists. */
-export const ALIVE_EVENT = 'tabtune:alive';
+export const ALIVE_EVENT = 'tabfader:alive';
 
 /**
  * There is no browser event for extension uninstall, so an injected script

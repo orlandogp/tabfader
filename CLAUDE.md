@@ -1,4 +1,4 @@
-# TabTune
+# TabFader
 
 Trust-first per-tab audio control extension (Manifest V3, WXT + Preact). Auto-detects
 audible tabs, mutes any tab for free, and offers fine 0–100% volume per site via an
@@ -6,6 +6,8 @@ opt-in permission. **100% local — no backend, no telemetry, no accounts.**
 
 Design spec: `docs/superpowers/specs/2026-07-17-tabtune-per-tab-audio-design.md`
 Implementation plan: `docs/superpowers/plans/2026-07-17-tabtune-per-tab-audio.md`
+Both documents predate the rename from the working name TabTune (2026-09-07); their file
+names keep the original slug.
 
 ## Language
 

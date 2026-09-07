@@ -23,12 +23,12 @@ export default defineConfig({
     },
   },
   manifest: {
-    name: 'TabTune',
+    name: 'TabFader',
     description: 'Per-tab audio control: auto-detect, mute, and fine volume per site. 100% local.',
     permissions: ['tabs', 'storage', 'scripting'],
     optional_host_permissions: ['*://*/*'],
     action: {
-      default_title: 'TabTune',
+      default_title: 'TabFader',
       // NOTE: Chromium falls back to `icons` when this is missing; declared explicitly so
       // the store-reviewed manifest states the toolbar icon instead of relying on it.
       default_icon: { 16: 'icon/16.png', 32: 'icon/32.png', 48: 'icon/48.png' },

@@ -1,5 +1,5 @@
 {
-  "name": "tabtune",
+  "name": "tabfader",
   "version": "0.2.5",
   "description": "Trust-first per-tab audio control extension for Chromium browsers",
   "scripts": {

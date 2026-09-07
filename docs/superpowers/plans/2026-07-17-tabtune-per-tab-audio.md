@@ -1,5 +1,7 @@
 # TabTune — Per-Tab Audio Control Implementation Plan
 
+> **Note (2026-09-07):** the product was renamed from the working name TabTune to **TabFader**. File names and identifiers in this plan keep the original slug.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a trust-first Manifest V3 browser extension that auto-detects audible tabs, lets the user mute any tab for free, and controls fine 0–100% volume per site via an opt-in permission flow.
