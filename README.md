@@ -7,7 +7,7 @@ via an opt-in permission. 100% local — no telemetry, no affiliates, open sourc
 ## Develop
 - `pnpm dev` — run with hot reload
 - `pnpm test` — unit + component tests
-- `pnpm e2e` — Playwright end-to-end
+- `pnpm e2e` — Playwright end-to-end (`E2E_CHANNEL=msedge` runs it in the installed Edge; branded Chrome ignores `--load-extension` since 137)
 - `pnpm build` / `pnpm zip` — production build / store zip
 - `pnpm icons` — regenerate the extension icons from `assets/icon.svg`
 - `pnpm store:graphics` / `pnpm store:screenshots` — Chrome Web Store assets into `docs/store/`
