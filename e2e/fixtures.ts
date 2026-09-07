@@ -23,6 +23,10 @@ export const test = base.extend<{
   context: async ({}, use) => {
     const context = await chromium.launchPersistentContext('', {
       headless: false,
+      // NOTE: E2E_CHANNEL=msedge runs the same suite in the installed Edge. Branded Google
+      // Chrome ignores --load-extension since 137, so there the extension has to be loaded
+      // by hand from chrome://extensions; Chromium and Chrome for Testing still accept it.
+      channel: process.env.E2E_CHANNEL || undefined,
       args: [
         `--disable-extensions-except=${EXT_PATH}`,
         `--load-extension=${EXT_PATH}`,
