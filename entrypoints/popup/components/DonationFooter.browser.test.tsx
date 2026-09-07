@@ -4,10 +4,10 @@ import { DonationFooter } from './DonationFooter';
 
 describe('DonationFooter', () => {
   it('renders the trust line and an external donation link', () => {
-    const { getByText, getByRole } = render(<DonationFooter donateUrl="https://ko-fi.com/tabtune" />);
+    const { getByText, getByRole } = render(<DonationFooter donateUrl="https://buymeacoffee.com/x" />);
     expect(getByText(/fully local/i)).toBeTruthy();
     const link = getByRole('link') as HTMLAnchorElement;
-    expect(link.href).toBe('https://ko-fi.com/tabtune');
+    expect(link.href).toBe('https://buymeacoffee.com/x');
     expect(link.target).toBe('_blank');
     expect(link.rel).toContain('noopener');
   });
