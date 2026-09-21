@@ -1,6 +1,6 @@
 {
   "name": "tabfader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Trust-first per-tab audio control extension for Chromium browsers",
   "scripts": {
     "dev": "wxt",
