@@ -4,6 +4,10 @@ Per-tab audio control for Chromium browsers. Auto-detects tabs that are playing
 sound, lets you mute any of them for free, and gives fine 0–100% volume per site
 via an opt-in permission. 100% local — no telemetry, no affiliates, open source.
 
+## Install
+From the [Chrome Web Store](https://chromewebstore.google.com/detail/tabfader-per-tab-volume-c/igpdnljkippanjngnjdoahcaopmckjch).
+Works on Chrome, Edge, Brave, Opera and Vivaldi.
+
 ## Develop
 - `pnpm dev` — run with hot reload
 - `pnpm test` — unit + component tests
@@ -12,7 +16,7 @@ via an opt-in permission. 100% local — no telemetry, no affiliates, open sourc
 - `pnpm icons` — regenerate the extension icons from `assets/icon.svg`
 - `pnpm store:graphics` / `pnpm store:screenshots` — Chrome Web Store assets into `docs/store/`
 
-## Install unpacked
+## Install unpacked (development)
 1. `pnpm build`
 2. Open `chrome://extensions`, enable Developer Mode.
 3. "Load unpacked" → select `.output/chrome-mv3`.
