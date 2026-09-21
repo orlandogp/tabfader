@@ -17,7 +17,7 @@ interface TabChangeInfo {
 
 interface RowState { granted: boolean; volume: number }
 
-export function App({ donateUrl }: { donateUrl: string }) {
+export function App({ donateUrl, repoUrl }: { donateUrl: string; repoUrl?: string }) {
   const [tabs, setTabs] = useState<AudibleTab[]>([]);
   const [rowState, setRowState] = useState<Record<string, RowState>>({});
 
@@ -101,7 +101,7 @@ export function App({ donateUrl }: { donateUrl: string }) {
         />
       ))}
 
-      <DonationFooter donateUrl={donateUrl} />
+      <DonationFooter donateUrl={donateUrl} repoUrl={repoUrl} />
     </div>
   );
 }

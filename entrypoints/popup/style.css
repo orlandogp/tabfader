@@ -22,3 +22,4 @@ input[type=range] { width: 100%; margin-top: 6px; }
 .volume-slider input[type=range] { flex: 1; }
 .volume-slider .pct { font-size: 11px; opacity: .6; width: 34px; text-align: right; flex: 0 0 auto; }
 .fader-mark { display: block; flex: 0 0 auto; }
+.trust a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }

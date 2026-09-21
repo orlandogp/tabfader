@@ -29,6 +29,12 @@ test('popup lists the audible tab and mutes it', async ({ context, extensionId, 
   }
   expect(listed, 'expected the audible media tab to appear in the popup list').toBe(true);
 
+  // The footer's "Open source" link is fed from the manifest's homepage_url.
+  await expect(popup.getByRole('link', { name: /open source/i })).toHaveAttribute(
+    'href',
+    'https://github.com/orlandogp/tabfader',
+  );
+
   // The audible page should appear in the list; mute button toggles.
   await expect(popup.getByRole('button', { name: /mute all/i })).toBeVisible();
   await popup.getByRole('button', { name: /mute all/i }).click();
