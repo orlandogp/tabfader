@@ -45,5 +45,9 @@ export default defineConfig({
       },
     },
     ...(mode === 'screenshots' ? { host_permissions: ['*://*/*'] } : {}),
+    // NOTE: `--mode e2e` (output: .output/chrome-mv3-e2e) pre-grants ONLY 127.0.0.1 for the
+    // same reason: the E2E suite needs a granted site to drive the slider, while `localhost`
+    // stays ungranted to cover the opt-in path.
+    ...(mode === 'e2e' ? { host_permissions: ['*://127.0.0.1/*'] } : {}),
   }),
 });
