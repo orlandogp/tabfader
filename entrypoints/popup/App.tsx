@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import type { AudibleTab } from '@/lib/types';
 import { sendToBackground } from '@/lib/messages';
@@ -17,21 +17,38 @@ interface TabChangeInfo {
 
 interface RowState { granted: boolean; volume: number }
 
-export function App({ donateUrl, repoUrl }: { donateUrl: string; repoUrl?: string }) {
-  const [tabs, setTabs] = useState<AudibleTab[]>([]);
-  const [rowState, setRowState] = useState<Record<string, RowState>>({});
+interface PanelState {
+  tabs: AudibleTab[];
+  rowState: Record<string, RowState>;
+  /** False until the first list arrives, so "Nothing is playing" is never a guess. */
+  loaded: boolean;
+}
 
+async function loadRowState(origin: string): Promise<[string, RowState]> {
+  const [granted, volume] = await Promise.all([hasOriginPermission(origin), getSiteVolume(origin)]);
+  return [origin, { granted, volume }];
+}
+
+export function App({ donateUrl, repoUrl }: { donateUrl: string; repoUrl?: string }) {
+  const [{ tabs, rowState, loaded }, setPanel] = useState<PanelState>({ tabs: [], rowState: {}, loaded: false });
+  const shownTabIds = useRef<number[]>([]);
+  const lastRequest = useRef(0);
+  const lastApplied = useRef(0);
+
+  // Tab events fire in bursts and every refresh is async, so: (1) list + row state land
+  // in ONE render (rows never show a placeholder state first), (2) a response older than
+  // the one already on screen is dropped, (3) the rows on screen are kept even after
+  // they go quiet, so intermittent audio does not make them blink in and out.
   async function refresh() {
-    const list = (await sendToBackground({ type: 'list' })) as AudibleTab[];
-    setTabs(list);
-    const entries: Record<string, RowState> = {};
-    for (const t of list) {
-      entries[t.origin] = {
-        granted: await hasOriginPermission(t.origin),
-        volume: await getSiteVolume(t.origin),
-      };
-    }
-    setRowState(entries);
+    const request = ++lastRequest.current;
+    const list = await sendToBackground({ type: 'list', keep: shownTabIds.current });
+    if (!Array.isArray(list)) return; // background handler failed: keep what is on screen
+    const origins = [...new Set(list.map((t) => t.origin))];
+    const rowState = Object.fromEntries(await Promise.all(origins.map(loadRowState)));
+    if (request < lastApplied.current) return;
+    lastApplied.current = request;
+    shownTabIds.current = list.map((t) => t.id);
+    setPanel({ tabs: list, rowState, loaded: true });
   }
 
   useEffect(() => {
@@ -66,7 +83,7 @@ export function App({ donateUrl, repoUrl }: { donateUrl: string; repoUrl?: strin
   }
 
   async function setVolume(t: AudibleTab, volume: number) {
-    setRowState((s) => ({ ...s, [t.origin]: { ...s[t.origin], volume } }));
+    setPanel((p) => ({ ...p, rowState: { ...p.rowState, [t.origin]: { ...p.rowState[t.origin], volume } } }));
     await sendToBackground({ type: 'setVolume', tabId: t.id, origin: t.origin, volume });
   }
 
@@ -88,7 +105,7 @@ export function App({ donateUrl, repoUrl }: { donateUrl: string; repoUrl?: strin
       </header>
 
       <div class="section-label">🟢 Playing now</div>
-      {tabs.length === 0 && <div class="empty">Nothing is playing right now.</div>}
+      {loaded && tabs.length === 0 && <div class="empty">Nothing is playing right now.</div>}
       {tabs.map((t) => (
         <TabRow
           key={t.id}

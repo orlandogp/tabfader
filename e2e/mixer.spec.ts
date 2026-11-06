@@ -4,6 +4,9 @@ import { test, expect, media } from './fixtures';
 // NOTE: `.tab-row` only SCOPES a row by its title; every interaction inside it goes
 // through accessible roles/names, which is the contract users (and screen readers) rely on.
 const row = (popup: Page, title: string) => popup.locator('.tab-row', { hasText: title });
+// Row mute buttons are named after their tab ("Mute Lofi radio"); the row already scopes them.
+const MUTE = /^Mute /;
+const UNMUTE = /^Unmute /;
 const MUTE_ALL = /(^|\s)Mute all$/;
 const UNMUTE_ALL = /(^|\s)Unmute all$/;
 
@@ -21,13 +24,13 @@ test('row mute button really mutes the tab and unmuting restores it', async ({ e
   const popup = await ext.openPopup();
   const lofi = row(popup, 'Lofi radio');
 
-  await lofi.getByRole('button', { name: 'Mute', exact: true }).click();
+  await lofi.getByRole('button', { name: MUTE }).click();
   await expect.poll(async () => (await ext.tabState(page)).muted).toBe(true);
-  await expect(lofi.getByRole('button', { name: 'Unmute', exact: true })).toBeVisible();
+  await expect(lofi.getByRole('button', { name: UNMUTE })).toBeVisible();
 
-  await lofi.getByRole('button', { name: 'Unmute', exact: true }).click();
+  await lofi.getByRole('button', { name: UNMUTE }).click();
   await expect.poll(async () => (await ext.tabState(page)).muted).toBe(false);
-  await expect(lofi.getByRole('button', { name: 'Mute', exact: true })).toBeVisible();
+  await expect(lofi.getByRole('button', { name: MUTE })).toBeVisible();
 });
 
 test('Mute all mutes every audible tab in the browser', async ({ ext, site }) => {
@@ -50,7 +53,7 @@ test('a muted tab stays listed after its audio stops and can be unmuted from the
   const page = await ext.openPlaying(site.granted('Muted then paused'));
   const popup = await ext.openPopup();
   const r = row(popup, 'Muted then paused');
-  await r.getByRole('button', { name: 'Mute', exact: true }).click();
+  await r.getByRole('button', { name: MUTE }).click();
   await expect.poll(async () => (await ext.tabState(page)).muted).toBe(true);
 
   await media(page).pause();
@@ -59,7 +62,7 @@ test('a muted tab stays listed after its audio stops and can be unmuted from the
   // Reopen too: the fix must not depend on the popup having seen the tab before.
   const fresh = await ext.openPopup();
   for (const p of [popup, fresh]) await expect(row(p, 'Muted then paused')).toBeVisible();
-  await row(fresh, 'Muted then paused').getByRole('button', { name: 'Unmute', exact: true }).click();
+  await row(fresh, 'Muted then paused').getByRole('button', { name: UNMUTE }).click();
   await expect.poll(async () => (await ext.tabState(page)).muted).toBe(false);
 });
 
@@ -94,7 +97,7 @@ test('ungranted site shows the opt-in button and still mutes', async ({ ext, sit
   await expect(r.getByRole('button', { name: /control volume here/i })).toBeVisible();
   await expect(r.getByRole('slider')).toHaveCount(0);
 
-  await r.getByRole('button', { name: 'Mute', exact: true }).click();
+  await r.getByRole('button', { name: MUTE }).click();
   await expect.poll(async () => (await ext.tabState(page)).muted).toBe(true);
 });
 
@@ -114,10 +117,10 @@ test('mute + volume change + unmute keeps the volume and clears the mute', async
   const popup = await ext.openPopup();
   const r = row(popup, 'Combo');
 
-  await r.getByRole('button', { name: 'Mute', exact: true }).click();
+  await r.getByRole('button', { name: MUTE }).click();
   await expect.poll(async () => (await ext.tabState(page)).muted).toBe(true);
   await r.getByRole('slider', { name: 'Volume' }).fill('30');
-  await r.getByRole('button', { name: 'Unmute', exact: true }).click();
+  await r.getByRole('button', { name: UNMUTE }).click();
 
   await expect.poll(async () => (await ext.tabState(page)).muted).toBe(false);
   await expect.poll(() => media(page).volume()).toBe(0.3);

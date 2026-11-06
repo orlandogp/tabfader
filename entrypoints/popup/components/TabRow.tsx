@@ -11,13 +11,20 @@ interface Props {
   onVolume: (unit: number) => void;
 }
 
+function statusSuffix(tab: AudibleTab): string {
+  if (tab.muted) return ' · muted';
+  if (!tab.audible) return ' · silent';
+  return '';
+}
+
 export function TabRow({ tab, granted, volume, onToggleMute, onUnlock, onVolume }: Props) {
+  const quiet = !tab.audible && !tab.muted;
   return (
-    <div class="tab-row">
+    <div class={quiet ? 'tab-row quiet' : 'tab-row'}>
       {tab.favIconUrl ? <img class="fav" src={tab.favIconUrl} alt="" width={18} height={18} /> : <span class="fav" />}
       <div class="meta">
         <div class="title">{tab.title}</div>
-        <div class="origin">{tab.origin}{tab.muted ? ' · muted' : ''}</div>
+        <div class="origin">{tab.origin}{statusSuffix(tab)}</div>
         {granted
           ? <VolumeSlider value={volume} onChange={onVolume} />
           : (
@@ -26,7 +33,7 @@ export function TabRow({ tab, granted, volume, onToggleMute, onUnlock, onVolume 
             </button>
           )}
       </div>
-      <button class="mute" aria-label={tab.muted ? 'Unmute' : 'Mute'} onClick={onToggleMute}>
+      <button class="mute" aria-label={`${tab.muted ? 'Unmute' : 'Mute'} ${tab.title}`} onClick={onToggleMute}>
         {tab.muted ? '🔇' : '🔊'}
       </button>
     </div>

@@ -2,7 +2,8 @@ import { browser } from 'wxt/browser';
 import type { AudibleTab } from './types';
 
 export type BackgroundMessage =
-  | { type: 'list' }
+  /** `keep`: tab ids the open popup already shows; listed while they still exist. */
+  | { type: 'list'; keep?: number[] }
   | { type: 'toggleMute'; tabId: number; muted: boolean }
   | { type: 'muteAll'; muted: boolean }
   | { type: 'setVolume'; tabId: number; origin: string; volume: number }

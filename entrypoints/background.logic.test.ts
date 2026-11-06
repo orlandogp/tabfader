@@ -35,6 +35,35 @@ describe('list', () => {
     expect(await handleMessage({ type: 'list' }, {} as any)).toEqual([]);
   });
 
+  // The open popup asks to `keep` the rows it already shows, so a tab that goes quiet
+  // stays put instead of flickering out and back in with intermittent audio.
+  it('keeps a requested tab that went silent', async () => {
+    openTabs([{ id: 5, url: 'https://a.com/x', title: 'A', audible: false, mutedInfo: { muted: false } }]);
+    const res = await handleMessage({ type: 'list', keep: [5] }, {} as any);
+    expect(res).toEqual([
+      { id: 5, title: 'A', url: 'https://a.com/x', origin: 'a.com', favIconUrl: undefined, muted: false, audible: false },
+    ]);
+  });
+
+  it('ignores kept ids that no longer exist', async () => {
+    openTabs([{ id: 1, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: false } }]);
+    const res = (await handleMessage({ type: 'list', keep: [99] }, {} as any)) as Array<{ id: number }>;
+    expect(res.map((t) => t.id)).toEqual([1]);
+  });
+
+  it('keeps a kept tab that navigated, with its new origin', async () => {
+    openTabs([{ id: 5, url: 'https://b.com/new', title: 'New page', audible: false, mutedInfo: { muted: false } }]);
+    const res = await handleMessage({ type: 'list', keep: [5] }, {} as any);
+    expect(res).toEqual([
+      expect.objectContaining({ id: 5, origin: 'b.com', title: 'New page' }),
+    ]);
+  });
+
+  it('drops a kept tab that navigated to an unsupported page', async () => {
+    openTabs([{ id: 5, url: 'chrome://newtab', title: 'New Tab', audible: false, mutedInfo: { muted: false } }]);
+    expect(await handleMessage({ type: 'list', keep: [5] }, {} as any)).toEqual([]);
+  });
+
   it('leaves out a muted tab on an unsupported page', async () => {
     openTabs([{ id: 6, url: 'chrome://settings', title: 'S', audible: false, mutedInfo: { muted: true } }]);
     expect(await handleMessage({ type: 'list' }, {} as any)).toEqual([]);

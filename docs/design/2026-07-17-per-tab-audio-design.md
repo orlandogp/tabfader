@@ -54,7 +54,7 @@ Los navegadores basados en Chromium (incluido Edge con su barra de medios) expon
 
 ### Panel (popup del ícono de la barra)
 - **Encabezado:** logo + nombre + botón "🔇 Silenciar todo" / "🔊 Reactivar todo" (toggle según estado).
-- **Sección "Sonando ahora":** lista solo las pestañas actualmente audibles, con ícono, título y dominio. Se actualiza en vivo.
+- **Sección "Sonando ahora":** lista las pestañas audibles, las silenciadas (aunque ya no suenen) y las de sitios bajados a 0%, con ícono, título y dominio. Se actualiza en vivo. Con el panel abierto, una fila que deja de sonar **no desaparece**: queda atenuada ("silent") hasta que su pestaña se cierre.
 - **Por cada fila:**
   - Botón **mute/unmute** — siempre disponible, sin permisos.
   - Si el sitio tiene permiso concedido: **slider de volumen 0–100%** + porcentaje.
@@ -76,16 +76,16 @@ Los navegadores basados en Chromium (incluido Edge con su barra de medios) expon
 Tres componentes + almacenamiento local:
 
 ### 5.1 Service worker (background) — "el cerebro"
-- Enumera pestañas audibles con `chrome.tabs.query({audible:true})` y mantiene la lista viva escuchando `chrome.tabs.onUpdated` (cambios en `audible` / `mutedInfo`) y `chrome.tabs.onRemoved`.
+- Arma la lista con una sola consulta `chrome.tabs.query({})`, filtrada a: audibles, silenciadas, de orígenes concedidos guardados a 0%, y las que el panel pide conservar (`keep`). Chrome apaga `audible` ~2.5 s después de que una pestaña se calla, esté silenciada o no, así que `audible` por sí solo no basta para decidir qué listar.
 - Ejecuta mute/unmute con `chrome.tabs.update(tabId, {muted})`.
 - Gestiona permisos por sitio (`chrome.permissions.request` / `chrome.permissions.getAll`).
 - Registra/inyecta el content script en orígenes concedidos vía `chrome.scripting.registerContentScripts` (persistente entre recargas) y `chrome.scripting.executeScript` para aplicar de inmediato.
 - Es el intermediario de mensajes entre popup y content scripts.
 
 ### 5.2 Popup — "el panel" (UI)
-- Al abrir, pide al service worker la lista de pestañas audibles + su estado y renderiza.
+- Al abrir, pide al service worker la lista + el estado de cada origen y renderiza todo en un solo paso (sin estados intermedios que parpadeen).
 - Envía comandos (mute, set-volume, request-permission) al service worker.
-- Mientras está abierto, se suscribe directamente a `chrome.tabs.onUpdated` / `onRemoved` (tiene acceso directo a la API) para mantener la lista viva sin re-abrir el panel.
+- Mientras está abierto, se suscribe directamente a `chrome.tabs.onUpdated` / `onRemoved` (tiene acceso directo a la API) para mantener la lista viva sin re-abrir el panel. Cada refresco envía los ids que ya muestra (`keep`) y descarta respuestas más viejas que la que ya está en pantalla.
 - Bundle deliberadamente pequeño (**Preact**) por confianza y rendimiento.
 
 ### 5.3 Content script — "volumen fino"
@@ -145,8 +145,10 @@ Descartados: **CRXJS** (mantenimiento estancado 2025–2026) y **Plasmo** (super
 | Usuario deniega el permiso | El sitio queda en modo solo-mute. |
 | Sitio con DRM | `.volume` atenúa/silencia normal; sin boost (que de todos modos no existe en v1). |
 | iframe de otro origen con media | Inyección `all_frames` best-effort; si falla, mute de toda la pestaña sigue disponible. |
-| Pestaña cerrada o deja de sonar | Se retira de la lista (`onRemoved` / `onUpdated`). |
-| Volumen bajado a 0% por TabTune | La pestaña deja de ser "audible" para el navegador, pero **permanece en la lista** (rastreada en `storage.session` como enmudecida-por-nosotros) hasta que se le suba el volumen, navegue a otro origen o se cierre — si no, el usuario perdería el slider para revivirla (bug hallado en prueba de campo). |
+| Pestaña cerrada | Se retira de la lista (`onRemoved`). |
+| Pestaña deja de sonar | Con el panel abierto, queda atenuada ("silent"); al reabrir el panel solo aparece si está silenciada o a 0%. |
+| Pestaña silenciada que deja de sonar | **Permanece en la lista** para poder reactivarla desde el panel (bug hallado en prueba de campo, 2026-11-06). |
+| Volumen bajado a 0% por TabTune | La pestaña deja de ser "audible" para el navegador, pero **permanece en la lista** (derivado en vivo de los permisos concedidos + el volumen guardado, sin estado de rastreo) hasta que se le suba el volumen, navegue a otro origen o se cierre — si no, el usuario perdería el slider para revivirla (bug hallado en prueba de campo). |
 | Service worker suspendido (MV3) | Estado persistido en `storage`; se reconstruye al despertar por evento. |
 
 ## 9. Confianza y monetización

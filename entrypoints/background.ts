@@ -99,8 +99,11 @@ export async function handleCommand(command: string): Promise<void> {
  * muted site goes quiet, and the user still needs the row to unmute it) and tabs of a
  * granted origin stored at 0% (silenced by us, so never `audible`, and the user needs
  * the slider to bring them back). Queried live: self-healing, no tracking state.
+ * `keep` are ids the open popup already shows: they stay listed (with their current
+ * page) until the tab closes, so intermittent audio cannot make rows blink.
  */
-export async function listTabs(): Promise<AudibleTab[]> {
+export async function listTabs(keep: number[] = []): Promise<AudibleTab[]> {
+  const kept = new Set(keep);
   const [tabs, { origins = [] }] = await Promise.all([browser.tabs.query({}), browser.permissions.getAll()]);
   const zeroedOrigins = new Set<string>();
   for (const pattern of origins) {
@@ -110,7 +113,10 @@ export async function listTabs(): Promise<AudibleTab[]> {
   return (
     tabs
       .map(toAudibleTab)
-      .filter((t): t is AudibleTab => t !== null && (t.audible || t.muted || zeroedOrigins.has(t.origin)))
+      .filter(
+        (t): t is AudibleTab =>
+          t !== null && (t.audible || t.muted || zeroedOrigins.has(t.origin) || kept.has(t.id)),
+      )
       // Stable, category-independent order (tab creation order): rows must not jump
       // while the user drags a slider and the `audible` flag flips under the cursor.
       .sort((a, b) => a.id - b.id)
@@ -123,7 +129,7 @@ export async function handleMessage(
 ): Promise<BackgroundResponse> {
   switch (msg.type) {
     case 'list':
-      return listTabs();
+      return listTabs(msg.keep);
     case 'toggleMute':
       await setTabMuted(msg.tabId, msg.muted);
       return;

@@ -2,6 +2,9 @@ import type { Page } from '@playwright/test';
 import { test, expect, media } from './fixtures';
 
 const row = (popup: Page, title: string) => popup.locator('.tab-row', { hasText: title });
+// Row mute buttons are named after their tab ("Mute Lofi radio"); the row already scopes them.
+const MUTE = /^Mute /;
+const UNMUTE = /^Unmute /;
 
 test('closing the tab removes its row; reopening the page brings it back', async ({ ext, site }) => {
   const url = site.granted('Comes and goes');
@@ -16,16 +19,63 @@ test('closing the tab removes its row; reopening the page brings it back', async
   await expect(row(popup, 'Comes and goes')).toBeVisible();
 });
 
+/** Counts `.tab-row` elements the popup removes from its DOM from now on. */
+async function countRowUnmounts(popup: Page): Promise<() => Promise<number>> {
+  await popup.evaluate(() => {
+    const w = window as unknown as { __rowUnmounts: number };
+    w.__rowUnmounts = 0;
+    new MutationObserver((records) => {
+      for (const r of records)
+        r.removedNodes.forEach((n) => {
+          if (n instanceof Element && n.matches('.tab-row')) w.__rowUnmounts++;
+        });
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  return () => popup.evaluate(() => (window as unknown as { __rowUnmounts: number }).__rowUnmounts);
+}
+
+// FIELD BUG (2026-11-06): a site with intermittent sound made its row vanish ~2.5s into
+// every silence and come back with the next sound: the popup blinked while open.
+test('a row never unmounts while its audio pauses and resumes', async ({ ext, site }) => {
+  const page = await ext.openPlaying(site.granted('Intermittent'));
+  const popup = await ext.openPopup();
+  const r = row(popup, 'Intermittent');
+  await expect(r).toBeVisible();
+  const unmounts = await countRowUnmounts(popup);
+
+  await media(page).pause();
+  await ext.waitAudible(page, false);
+  await expect(r).toContainText('silent');
+  await media(page).play();
+  await ext.waitAudible(page, true);
+  await expect(r).not.toContainText('silent');
+
+  expect(await unmounts()).toBe(0);
+});
+
+test('the silent row leaves only when its tab is closed', async ({ ext, site }) => {
+  const page = await ext.openPlaying(site.granted('Quiet then closed'));
+  const popup = await ext.openPopup();
+  const r = row(popup, 'Quiet then closed');
+  await media(page).pause();
+  await ext.waitAudible(page, false);
+  await expect(r).toContainText('silent');
+
+  await page.close();
+
+  await expect(r).toHaveCount(0);
+});
+
 test('closing and reopening the popup shows the same muted state', async ({ ext, site }) => {
   const page = await ext.openPlaying(site.granted('Sticky mute'));
   const first = await ext.openPopup();
-  await row(first, 'Sticky mute').getByRole('button', { name: 'Mute', exact: true }).click();
+  await row(first, 'Sticky mute').getByRole('button', { name: MUTE }).click();
   await expect.poll(async () => (await ext.tabState(page)).muted).toBe(true);
   await first.close();
 
   const second = await ext.openPopup();
   const r = row(second, 'Sticky mute');
-  await expect(r.getByRole('button', { name: 'Unmute', exact: true })).toBeVisible();
+  await expect(r.getByRole('button', { name: UNMUTE })).toBeVisible();
   await expect(r).toContainText('muted');
 });
 
