@@ -4,7 +4,7 @@ import { test, expect, media } from './fixtures';
 // NOTE: `.tab-row` only SCOPES a row by its title; every interaction inside it goes
 // through accessible roles/names, which is the contract users (and screen readers) rely on.
 const row = (popup: Page, title: string) => popup.locator('.tab-row', { hasText: title });
-// Row mute buttons are named after their tab ("Mute Lofi radio"); the row already scopes them.
+// NOTE: Row mute buttons are named after their tab ("Mute Lofi radio"); the row already scopes them.
 const MUTE = /^Mute /;
 const UNMUTE = /^Unmute /;
 const MUTE_ALL = /(^|\s)Mute all$/;
@@ -47,7 +47,7 @@ test('Mute all mutes every audible tab in the browser', async ({ ext, site }) =>
   await expect(popup.getByRole('button', { name: UNMUTE_ALL })).toBeVisible();
 });
 
-// FIELD BUG (2026-11-06): Chrome clears `audible` ~2.5s after a tab goes quiet, muted
+// NOTE: field bug (2026-11-06): Chrome clears `audible` ~2.5s after a tab goes quiet, muted
 // or not, so a muted tab whose site stopped playing vanished and could not be unmuted.
 test('a muted tab stays listed after its audio stops and can be unmuted from the popup', async ({ ext, site }) => {
   const page = await ext.openPlaying(site.granted('Muted then paused'));
@@ -59,7 +59,7 @@ test('a muted tab stays listed after its audio stops and can be unmuted from the
   await media(page).pause();
   await ext.waitAudible(page, false);
 
-  // Reopen too: the fix must not depend on the popup having seen the tab before.
+  // NOTE: Reopen too: the fix must not depend on the popup having seen the tab before.
   const fresh = await ext.openPopup();
   for (const p of [popup, fresh]) await expect(row(p, 'Muted then paused')).toBeVisible();
   await row(fresh, 'Muted then paused').getByRole('button', { name: UNMUTE }).click();
@@ -79,6 +79,23 @@ test('Unmute all reaches a muted tab that went silent', async ({ ext, site }) =>
 
   await expect.poll(async () => (await ext.tabState(quiet)).muted).toBe(false);
   await expect.poll(async () => (await ext.tabState(loud)).muted).toBe(false);
+});
+
+// NOTE: review bug (2026-11-06): Mute all skipped the paused tab the popup was showing, so its
+// next track played out loud and the button never flipped to "Unmute all".
+test('Mute all also mutes a silent row the open popup is showing', async ({ ext, site }) => {
+  const playing = await ext.openPlaying(site.granted('Still playing'));
+  const paused = await ext.openPlaying(site.granted('Between tracks'));
+  const popup = await ext.openPopup();
+  await media(paused).pause();
+  await ext.waitAudible(paused, false);
+  await expect(row(popup, 'Between tracks')).toContainText('silent');
+
+  await popup.getByRole('button', { name: MUTE_ALL }).click();
+
+  await expect.poll(async () => (await ext.tabState(playing)).muted).toBe(true);
+  await expect.poll(async () => (await ext.tabState(paused)).muted).toBe(true);
+  await expect(popup.getByRole('button', { name: UNMUTE_ALL })).toBeVisible();
 });
 
 test('the footer links to the source repository from the manifest', async ({ ext }) => {
@@ -121,7 +138,7 @@ test('slider volume reaches every tab of the same site', async ({ ext, site }) =
 
   await expect.poll(() => media(one).volume()).toBe(0.3);
   await expect.poll(() => media(two).volume()).toBe(0.3);
-  // Both rows share the site's volume, so both sliders say so.
+  // NOTE: Both rows share the site's volume, so both sliders say so.
   await expect(row(popup, 'Site tab two').getByText('30%')).toBeVisible();
 });
 

@@ -9,7 +9,7 @@ import fs from 'node:fs';
 // __dirname global) — derive it from import.meta.url instead.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Built by `pnpm e2e` (`wxt build --mode e2e`), which pre-grants 127.0.0.1 only.
+// NOTE: Built by `pnpm e2e` (`wxt build --mode e2e`), which pre-grants 127.0.0.1 only.
 const EXT_PATH = path.resolve(__dirname, '../.output/chrome-mv3-e2e');
 
 const MIME_TYPES: Record<string, string> = {
@@ -51,7 +51,7 @@ export class Harness {
       args: [
         `--disable-extensions-except=${EXT_PATH}`,
         `--load-extension=${EXT_PATH}`,
-        // The media page autoplays WITH sound so the tab becomes genuinely `audible`.
+        // NOTE: The media page autoplays WITH sound so the tab becomes genuinely `audible`.
         // NOTE: never add --mute-audio: it can suppress the `audible` flag entirely.
         '--autoplay-policy=no-user-gesture-required',
       ],
@@ -173,7 +173,7 @@ export const test = base.extend<{
   extensionId: async ({ ext }, use) => {
     await use(await ext.extensionId());
   },
-  // Serves e2e/ over http on 127.0.0.1 (http/https only: lib/origin.ts drops file:// tabs).
+  // NOTE: Serves e2e/ over http on 127.0.0.1 (http/https only: lib/origin.ts drops file:// tabs).
   site: async ({}, use) => {
     const server = http.createServer((req, res) => {
       const reqPath = (req.url ?? '/').split('?')[0];

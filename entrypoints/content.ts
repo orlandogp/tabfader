@@ -23,6 +23,12 @@ export function enforceVolume(el: HTMLMediaElement, volume: number): void {
 
 const MEDIA_SELECTOR = 'video, audio';
 
+// NOTE: a player that reuses its element re-assigns .volume about once per video; anything
+// faster is another writer enforcing its own value (a second volume extension, a "volume
+// lock" player). Past this budget we yield that element instead of ping-ponging forever.
+const MAX_REENFORCEMENTS = 5;
+const REENFORCE_WINDOW_MS = 1000;
+
 /**
  * Keeps every media element of `root` at the volume the user chose for this site.
  * `set(null)` = no choice yet: the page keeps full control of its own volume. Once a
@@ -32,14 +38,22 @@ const MEDIA_SELECTOR = 'video, audio';
 export function createVolumeEnforcer(root: Document) {
   let target: number | null = null;
   let enforced = false;
+  let fights = new WeakMap<HTMLMediaElement, { since: number; count: number }>();
 
   const onVolumeChange = (event: Event) => {
-    if (target !== null && event.target instanceof HTMLMediaElement) enforceVolume(event.target, target);
+    const el = event.target;
+    if (target === null || !(el instanceof HTMLMediaElement) || el.volume === target) return;
+    const now = Date.now();
+    let fight = fights.get(el);
+    if (!fight || now - fight.since > REENFORCE_WINDOW_MS) fight = { since: now, count: 0 };
+    fights.set(el, fight);
+    if (++fight.count > MAX_REENFORCEMENTS) return; // yielded until the user picks a volume again
+    enforceVolume(el, target);
   };
   // NOTE: media events do not bubble; a capture listener on the document still sees them.
   root.addEventListener('volumechange', onVolumeChange, true);
 
-  // Only scans what was added, not the whole document on every mutation (chat-heavy SPAs
+  // NOTE: Only scans what was added, not the whole document on every mutation (chat-heavy SPAs
   // mutate constantly).
   const observer = new MutationObserver((records) => {
     if (target === null) return;
@@ -56,6 +70,7 @@ export function createVolumeEnforcer(root: Document) {
   return {
     set(volume: number | null) {
       target = volume === null ? null : clampVolume(volume);
+      fights = new WeakMap(); // a fresh choice is worth fighting for again
       if (target === null) return;
       enforced = true;
       root.querySelectorAll<HTMLMediaElement>(MEDIA_SELECTOR).forEach((el) => enforceVolume(el, target!));

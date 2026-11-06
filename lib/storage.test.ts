@@ -14,7 +14,7 @@ describe('site volume storage', () => {
 });
 
 describe('getSitePref', () => {
-  // A site the user never set a volume for must be left alone, so "no preference" has
+  // NOTE: A site the user never set a volume for must be left alone, so "no preference" has
   // to be distinguishable from "100%".
   it('returns null when nothing is stored', async () => {
     const { getSitePref } = await import('./storage');

@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect, media } from './fixtures';
 
 const row = (popup: Page, title: string) => popup.locator('.tab-row', { hasText: title });
-// Row mute buttons are named after their tab ("Mute Lofi radio"); the row already scopes them.
+// NOTE: Row mute buttons are named after their tab ("Mute Lofi radio"); the row already scopes them.
 const MUTE = /^Mute /;
 const UNMUTE = /^Unmute /;
 
@@ -34,7 +34,7 @@ async function countRowUnmounts(popup: Page): Promise<() => Promise<number>> {
   return () => popup.evaluate(() => (window as unknown as { __rowUnmounts: number }).__rowUnmounts);
 }
 
-// FIELD BUG (2026-11-06): a site with intermittent sound made its row vanish ~2.5s into
+// NOTE: field bug (2026-11-06): a site with intermittent sound made its row vanish ~2.5s into
 // every silence and come back with the next sound: the popup blinked while open.
 test('a row never unmounts while its audio pauses and resumes', async ({ ext, site }) => {
   const page = await ext.openPlaying(site.granted('Intermittent'));
@@ -91,6 +91,7 @@ test('volume survives a page reload', async ({ ext, site }) => {
 });
 
 test('volume survives an extension reload and the slider still works after it', async ({ ext, site }) => {
+  test.setTimeout(60_000);
   const page = await ext.openPlaying(site.granted('Updated'));
   const popup = await ext.openPopup();
   await row(popup, 'Updated').getByRole('slider', { name: 'Volume' }).fill('30');
@@ -98,8 +99,11 @@ test('volume survives an extension reload and the slider still works after it', 
 
   await ext.reloadExtension();
 
-  // The page must not snap back to its default while the old script is orphaned.
-  await expect.poll(() => media(page).volume()).toBe(0.3);
+  // NOTE: The orphaned copy notices the reload within its 5s check and, if it saw no successor
+  // within its 8s grace, restores the page default (the uninstall path). Waiting past both
+  // proves the successor announced itself and the chosen volume stayed.
+  await page.waitForTimeout(15_000);
+  expect(await media(page).volume()).toBe(0.3);
   const fresh = await ext.openPopup();
   await row(fresh, 'Updated').getByRole('slider', { name: 'Volume' }).fill('60');
   await expect.poll(() => media(page).volume()).toBe(0.6);

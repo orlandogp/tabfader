@@ -19,7 +19,7 @@ describe('list', () => {
     ]);
   });
 
-  // FIELD BUG (2026-11-06): Chrome clears `audible` ~2.5s after a tab stops producing
+  // NOTE: field bug (2026-11-06): Chrome clears `audible` ~2.5s after a tab stops producing
   // sound, muted or not. A muted tab whose site went quiet vanished from the list and
   // could only be unmuted from the tab itself.
   it('includes a muted tab that is no longer audible', async () => {
@@ -35,7 +35,7 @@ describe('list', () => {
     expect(await handleMessage({ type: 'list' }, {} as any)).toEqual([]);
   });
 
-  // The open popup asks to `keep` the rows it already shows, so a tab that goes quiet
+  // NOTE: The open popup asks to `keep` the rows it already shows, so a tab that goes quiet
   // stays put instead of flickering out and back in with intermittent audio.
   it('keeps a requested tab that went silent', async () => {
     openTabs([{ id: 5, url: 'https://a.com/x', title: 'A', audible: false, mutedInfo: { muted: false } }]);
@@ -94,6 +94,19 @@ describe('muteAll', () => {
     expect(fakeBrowser.tabs.update).toHaveBeenCalledWith(4, { muted: false });
   });
 
+  // NOTE: review bug (2026-11-06): the open popup shows kept silent rows, but Mute all only
+  // reached what the background would list on its own, so a paused playlist stayed
+  // unmuted and the button never flipped to "Unmute all".
+  it('also reaches the silent rows the popup keeps', async () => {
+    openTabs([
+      { id: 1, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: false } },
+      { id: 5, url: 'https://b.com/y', title: 'B', audible: false, mutedInfo: { muted: false } },
+    ]);
+    await handleMessage({ type: 'muteAll', muted: true, keep: [5] }, {} as any);
+    expect(fakeBrowser.tabs.update).toHaveBeenCalledWith(1, { muted: true });
+    expect(fakeBrowser.tabs.update).toHaveBeenCalledWith(5, { muted: true });
+  });
+
   it('never touches a silent, unmuted tab that is not listed', async () => {
     openTabs([
       { id: 1, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: false } },
@@ -135,7 +148,7 @@ describe('handleMessage', () => {
     expect((fakeBrowser as any).scripting.executeScript).not.toHaveBeenCalled();
   });
 
-  // REVIEW BUG (2026-11-06): volume is stored per origin, but only the tab whose slider
+  // NOTE: review bug (2026-11-06): volume is stored per origin, but only the tab whose slider
   // moved got the message; a second tab of the same site kept playing at the old level.
   it('setVolume applies to every open tab of the origin, and only that origin', async () => {
     fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
@@ -214,7 +227,7 @@ describe('handleMessage', () => {
     };
     const res = await handleMessage({ type: 'grantSite', tabId: 9, origin: 'a.com' }, {} as any);
     expect(res).toEqual({ granted: true });
-    // Re-granting must not fail on the already-registered id: unregister it first.
+    // NOTE: Re-granting must not fail on the already-registered id: unregister it first.
     expect((fakeBrowser as any).scripting.unregisterContentScripts).toHaveBeenCalledWith({ ids: ['tabfader-a.com'] });
     expect(fakeBrowser.permissions.contains).toHaveBeenCalledWith({ origins: ['*://a.com/*'] });
     expect((fakeBrowser as any).scripting.registerContentScripts).toHaveBeenCalledWith([
@@ -273,7 +286,7 @@ describe('zero-volume origins stay listed', () => {
   });
 
   it('does not force-list a 0% origin whose permission was revoked', async () => {
-    // Without the permission the content script no longer silences the tab, so it is
+    // NOTE: Without the permission the content script no longer silences the tab, so it is
     // just a quiet tab like any other.
     const { setSiteVolume } = await import('@/lib/storage');
     await setSiteVolume('a.com', 0);
@@ -297,7 +310,7 @@ describe('zero-volume origins stay listed', () => {
     // category-independent: tab creation order (id).
     const { setSiteVolume } = await import('@/lib/storage');
     await setSiteVolume('a.com', 0);
-    // tabs.query({}) does not promise any order; hand it the later tab first.
+    // NOTE: tabs.query({}) does not promise any order; hand it the later tab first.
     openTabs(
       [
         { id: 9, url: 'https://b.com/y', title: 'B', audible: true, mutedInfo: { muted: false } },

@@ -22,7 +22,7 @@ describe('enforceVolume', () => {
     vi.restoreAllMocks();
   });
 
-  // Writing .volume fires `volumechange`, which the enforcer listens to: an unconditional
+  // NOTE: Writing .volume fires `volumechange`, which the enforcer listens to: an unconditional
   // write would re-trigger itself forever.
   it('leaves an element already at the target untouched', () => {
     const el = document.createElement('audio');
@@ -60,7 +60,7 @@ describe('createVolumeEnforcer', () => {
     el.dispatchEvent(new Event('volumechange')); // what the browser fires on every .volume write
   };
 
-  // REVIEW BUG (2026-11-06): granting a site applied the 100% default to its media, so a
+  // NOTE: review bug (2026-11-06): granting a site applied the 100% default to its media, so a
   // page the user kept at 50% jumped to full volume before they ever touched the slider.
   it('touches nothing until a volume is chosen', () => {
     const enforcer = setup('<audio></audio>');
@@ -78,7 +78,7 @@ describe('createVolumeEnforcer', () => {
     expect((document.querySelector('video') as HTMLVideoElement).volume).toBe(0.3);
   });
 
-  // REVIEW BUG (2026-11-06): players that reuse one element (YouTube) re-assign .volume on
+  // NOTE: review bug (2026-11-06): players that reuse one element (YouTube) re-assign .volume on
   // every new video; the old DOM-only observer never noticed and the choice was lost.
   it('re-applies the chosen volume when the page changes it', () => {
     const enforcer = setup('<audio></audio>');
@@ -125,6 +125,110 @@ describe('createVolumeEnforcer', () => {
     document.body.appendChild(late);
     await new Promise((r) => setTimeout(r, 0));
     expect(late.volume).toBe(1);
+  });
+
+  // NOTE: review bug (2026-11-06): another writer that also enforces .volume (a second volume
+  // extension, a "volume lock" player) ping-ponged with us forever, burning a CPU core
+  // and warbling the audio. We back off from an element that keeps fighting.
+  it('gives up on an element that keeps overriding the chosen volume', () => {
+    vi.useFakeTimers();
+    try {
+      const enforcer = setup('<audio></audio>');
+      const el = audio();
+      let value = 1;
+      let eventPending = false;
+      const ourWrites: number[] = [];
+      Object.defineProperty(el, 'volume', {
+        get: () => value,
+        set: (v: number) => {
+          value = v;
+          if (v === 0.3) ourWrites.push(v);
+          // NOTE: The browser fires volumechange async. One pending event at a time keeps the
+          // simulated fight linear instead of doubling its events every round.
+          if (eventPending) return;
+          eventPending = true;
+          setTimeout(() => {
+            eventPending = false;
+            el.dispatchEvent(new Event('volumechange'));
+          }, 0);
+        },
+      });
+      // NOTE: The rival re-asserts 1 every time the volume changes.
+      el.addEventListener('volumechange', () => {
+        if (value !== 1) el.volume = 1;
+      });
+
+      enforcer.set(0.3);
+      // NOTE: Step event by event (an unbounded fight never lets advanceTimersByTime return).
+      for (let step = 0; step < 200; step++) vi.advanceTimersToNextTimer();
+
+      expect(ourWrites.length).toBeGreaterThan(1); // we did try to win
+      expect(ourWrites.length).toBeLessThanOrEqual(6); // ...but stopped fighting
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('re-enforces every occasional override, and its own writes do not use up the budget', () => {
+    vi.useFakeTimers();
+    try {
+      const enforcer = setup('<audio></audio>');
+      const el = audio();
+      let value = 1;
+      Object.defineProperty(el, 'volume', {
+        get: () => value,
+        set: (v: number) => {
+          value = v;
+          setTimeout(() => el.dispatchEvent(new Event('volumechange')), 0); // like the browser
+        },
+      });
+      enforcer.set(0.3);
+      vi.runAllTimers();
+
+      // Five separate page overrides inside one second (e.g. quick track skips).
+      for (let i = 0; i < 5; i++) {
+        value = 1;
+        el.dispatchEvent(new Event('volumechange'));
+        vi.runAllTimers(); // our write's own volumechange
+        expect(value).toBe(0.3);
+        vi.advanceTimersByTime(100);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('fights again after the user picks a new volume', () => {
+    vi.useFakeTimers();
+    try {
+      const enforcer = setup('<audio></audio>');
+      const el = audio();
+      for (let i = 0; i < 10; i++) {
+        enforcer.set(0.3);
+        pageSetsVolume(el, 1); // a fight: re-enforced each time until we back off
+      }
+      enforcer.set(0.5);
+      expect(el.volume).toBe(0.5);
+      pageSetsVolume(el, 1);
+      expect(el.volume).toBe(0.5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps re-enforcing an occasional override (new video in a reused player)', () => {
+    vi.useFakeTimers();
+    try {
+      const enforcer = setup('<audio></audio>');
+      enforcer.set(0.3);
+      for (let i = 0; i < 10; i++) {
+        vi.advanceTimersByTime(5_000);
+        pageSetsVolume(audio(), 1);
+        expect(audio().volume).toBe(0.3);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('stops enforcing after stop()', () => {
@@ -179,7 +283,7 @@ describe('watchExtensionLiveness', () => {
     vi.advanceTimersByTime(5000);
     expect(onUninstalled).toHaveBeenCalledTimes(1);
 
-    // Polling stops once the death is handled: nothing fires twice.
+    // NOTE: Polling stops once the death is handled: nothing fires twice.
     vi.advanceTimersByTime(30_000);
     expect(onOrphaned).toHaveBeenCalledTimes(1);
     expect(onUninstalled).toHaveBeenCalledTimes(1);

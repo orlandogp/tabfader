@@ -10,7 +10,7 @@ export default defineConfig({
   use: { headless: false }, // extensions require a headed context
   projects: [
     { name: 'chromium' },
-    // Branded Chrome ignores --load-extension since 137; installed Edge still honours it.
+    // NOTE: Branded Chrome ignores --load-extension since 137; installed Edge still honours it.
     { name: 'msedge', use: { channel: 'msedge' } },
   ],
   // Route artifacts under e2e/ to match the repo's existing .gitignore

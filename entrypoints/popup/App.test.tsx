@@ -40,11 +40,11 @@ describe('App', () => {
     expect(screen.getByText('youtube.com')).toBeTruthy();
   });
 
-  it('sends muteAll (muted: true) when not every tab is muted', async () => {
+  it('sends muteAll (muted: true) for the rows it shows when not every tab is muted', async () => {
     render(<App donateUrl="https://ko-fi.com/x" />);
     await waitFor(() => screen.getByText('Lofi'));
     fireEvent.click(screen.getByText(/mute all/i));
-    expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'muteAll', muted: true });
+    expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'muteAll', muted: true, keep: [1] });
   });
 
   it('offers Unmute all (muted: false) when every tab is already muted', async () => {
@@ -52,7 +52,7 @@ describe('App', () => {
     render(<App donateUrl="https://ko-fi.com/x" />);
     await waitFor(() => screen.getByText('Lofi'));
     fireEvent.click(screen.getByText(/unmute all/i));
-    expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'muteAll', muted: false });
+    expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'muteAll', muted: false, keep: [1] });
   });
 
   it('refreshes the tab list live when a tab changes while the popup is open', async () => {
@@ -74,7 +74,7 @@ describe('App', () => {
     await waitFor(() => expect(listCalls()[1][0]).toEqual({ type: 'list', keep: [1] }));
   });
 
-  // FIELD BUG (2026-11-06): rows rendered first and fetched their permission/volume after,
+  // NOTE: field bug (2026-11-06): rows rendered first and fetched their permission/volume after,
   // so a granted row flashed "Control volume here" at 100% on every (re)appearance.
   it('a newly listed granted row never flashes the opt-in button', async () => {
     const permission = deferred<boolean>();
@@ -108,7 +108,7 @@ describe('App', () => {
     const checksBefore = permissionChecks();
     await act(async () => older.resolve([LOFI]));
 
-    // The stale response has been fully processed (its row state loaded) and had every
+    // NOTE: The stale response has been fully processed (its row state loaded) and had every
     // chance to render before we assert it did not.
     await waitFor(() => expect(permissionChecks()).toBe(checksBefore + 1));
     await act(() => new Promise((r) => setTimeout(r, 20)));
@@ -195,7 +195,7 @@ describe('App', () => {
     render(<App donateUrl="https://ko-fi.com/x" />);
     await waitFor(() => screen.getByText('News'));
     fireEvent.click(screen.getByRole('button', { name: /(^|\s)Mute all$/ }));
-    expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'muteAll', muted: true });
+    expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'muteAll', muted: true, keep: [1, 2] });
   });
 
   it('the row mute button mutes that tab and refreshes', async () => {
@@ -246,6 +246,58 @@ describe('App', () => {
     });
   });
 
+  // NOTE: review bug (2026-11-06): a refresh fired mid-drag (raising a 0% site wakes its tabs
+  // and flips `audible`) read storage before the background stored the new volume, and
+  // snapped the thumb back under the cursor.
+  it('a refresh during a volume change keeps the volume the user just set', async () => {
+    const { setSiteVolume } = await import('@/lib/storage');
+    await setSiteVolume('youtube.com', 0.1);
+    fakeBrowser.permissions.contains = vi.fn(async () => true) as any;
+    const stored = deferred<void>();
+    const background = fakeBrowser.runtime.sendMessage as ReturnType<typeof vi.fn>;
+    const listOnly = background.getMockImplementation()!;
+    fakeBrowser.runtime.sendMessage = vi.fn((msg: any) => (msg.type === 'setVolume' ? stored.promise : listOnly(msg))) as any;
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('10%'));
+
+    fireEvent.input(screen.getByRole('slider'), { target: { value: '40' } });
+    await tabUpdated();
+    await waitFor(() => expect(listCalls()).toHaveLength(2));
+    await act(() => new Promise((r) => setTimeout(r, 20)));
+
+    expect(screen.getByText('40%')).toBeTruthy();
+    expect(screen.getByRole('slider')).toHaveValue('40');
+
+    // NOTE: Once the write is confirmed, storage is the source of truth again.
+    await act(async () => stored.resolve());
+    await setSiteVolume('youtube.com', 0.25);
+    await tabUpdated();
+    await waitFor(() => screen.getByText('25%'));
+  });
+
+  it('with two volume writes in flight, the first confirmation does not drop the second', async () => {
+    const { setSiteVolume } = await import('@/lib/storage');
+    await setSiteVolume('youtube.com', 0.1);
+    fakeBrowser.permissions.contains = vi.fn(async () => true) as any;
+    const writes = [deferred<void>(), deferred<void>()];
+    let write = 0;
+    const listOnly = (fakeBrowser.runtime.sendMessage as ReturnType<typeof vi.fn>).getMockImplementation()!;
+    fakeBrowser.runtime.sendMessage = vi.fn((msg: any) =>
+      msg.type === 'setVolume' ? writes[write++].promise : listOnly(msg),
+    ) as any;
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('10%'));
+
+    fireEvent.input(screen.getByRole('slider'), { target: { value: '30' } });
+    fireEvent.input(screen.getByRole('slider'), { target: { value: '40' } });
+    await act(async () => writes[0].resolve());
+    await tabUpdated();
+    await waitFor(() => expect(listCalls()).toHaveLength(2));
+    await act(() => new Promise((r) => setTimeout(r, 20)));
+
+    expect(screen.getByText('40%')).toBeTruthy();
+  });
+
   it('a granted opt-in tells the background and refreshes', async () => {
     fakeBrowser.permissions.request = vi.fn(async () => true) as any;
     render(<App donateUrl="https://ko-fi.com/x" />);
@@ -270,8 +322,42 @@ describe('App', () => {
     expect(listCalls()).toHaveLength(1);
   });
 
+  // NOTE: review bug (2026-11-06): one origin whose permission/volume lookup rejected sank the
+  // whole refresh; on first load the panel stayed blank (not even the empty state).
+  it('still lists every row when one origin lookup fails', async () => {
+    backgroundLists([LOFI, NEWS]);
+    fakeBrowser.permissions.contains = vi.fn(async ({ origins }: { origins: string[] }) => {
+      if (origins[0].includes('news.com')) throw new Error('Invalid match pattern');
+      return true;
+    }) as any;
+    render(<App donateUrl="https://ko-fi.com/x" />);
+
+    await waitFor(() => screen.getByText('News'));
+    expect(screen.getByText('Lofi')).toBeTruthy();
+    expect(screen.getAllByRole('slider')).toHaveLength(1); // Lofi granted; News falls back to opt-in
+    expect(screen.getByText(/control volume here/i)).toBeTruthy();
+  });
+
+  it('recovers on the next tab event when the first list request fails', async () => {
+    let first = true;
+    fakeBrowser.runtime.sendMessage = vi.fn(async (msg: any) => {
+      if (msg.type !== 'list') return undefined;
+      if (first) {
+        first = false;
+        throw new Error('Could not establish connection');
+      }
+      return [LOFI];
+    }) as any;
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await act(() => new Promise((r) => setTimeout(r, 20)));
+
+    await tabUpdated();
+
+    await waitFor(() => screen.getByText('Lofi'));
+  });
+
   it('keeps the current rows when a refresh gets no list back', async () => {
-    // The background answers `undefined` when its handler throws.
+    // NOTE: The background answers `undefined` when its handler throws.
     backgroundLists([LOFI], undefined);
     render(<App donateUrl="https://ko-fi.com/x" />);
     await waitFor(() => screen.getByText('Lofi'));

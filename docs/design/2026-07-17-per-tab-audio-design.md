@@ -91,7 +91,9 @@ Tres componentes + almacenamiento local:
 ### 5.3 Content script — "volumen fino"
 - Se inyecta **solo** en orígenes concedidos.
 - Ajusta `HTMLMediaElement.volume` (rango 0.0–1.0) en todos los elementos `<audio>`/`<video>`.
-- Observa nuevos reproductores con `MutationObserver` y re-aplica el volumen guardado al cargar/navegar.
+- **Sin volumen elegido, no toca nada:** mientras el usuario no haya movido el slider para ese sitio, la página conserva su propio volumen (conceder el permiso no la sube al 100%).
+- Con un volumen elegido, **TabFader gana**: lo aplica al cargar, a los reproductores nuevos (el `MutationObserver` revisa solo los nodos agregados) y lo re-impone cuando la página reasigna `.volume` (evento `volumechange`; p. ej. reproductores que reusan el mismo elemento por video). El control de volumen propio de la página deja de tener efecto en ese sitio.
+- **Tope anti-pelea:** si otro escritor (otra extensión de volumen, un reproductor que "bloquea" su volumen) lo revierte más de 5 veces en 1 s, TabFader le cede ese elemento hasta que el usuario elija un volumen nuevo, en vez de pelear indefinidamente.
 - Se inyecta con `all_frames: true` para alcanzar iframes del mismo origen concedido (best-effort en iframes de otro origen).
 
 ### 5.4 Decisión técnica clave: sin boost ⇒ solo `.volume`
@@ -145,6 +147,7 @@ Descartados: **CRXJS** (mantenimiento estancado 2025–2026) y **Plasmo** (super
 | Usuario deniega el permiso | El sitio queda en modo solo-mute. |
 | Sitio con DRM | `.volume` atenúa/silencia normal; sin boost (que de todos modos no existe en v1). |
 | iframe de otro origen con media | Inyección `all_frames` best-effort; si falla, mute de toda la pestaña sigue disponible. |
+| Media en shadow DOM o `new Audio()` sin insertar | No alcanzables con `.volume` desde el documento (ni `querySelectorAll` ni `volumechange` cruzan esos límites); queda el mute de la pestaña. |
 | Pestaña cerrada | Se retira de la lista (`onRemoved`). |
 | Pestaña deja de sonar | Con el panel abierto, queda atenuada ("silent"); al reabrir el panel solo aparece si está silenciada o a 0%. |
 | Pestaña silenciada que deja de sonar | **Permanece en la lista** para poder reactivarla desde el panel (bug hallado en prueba de campo, 2026-11-06). |

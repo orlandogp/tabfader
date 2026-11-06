@@ -3,19 +3,23 @@ import { test, expect, media } from './fixtures';
 
 const row = (popup: Page, title: string) => popup.locator('.tab-row', { hasText: title });
 
-// REVIEW BUG (2026-11-06): granting a site forced its media to the 100% default before the
+// NOTE: review bug (2026-11-06): granting a site forced its media to the 100% default before the
 // user ever touched the slider.
 test('granted site without a preference keeps the page volume', async ({ ext, site }) => {
+  // NOTE: The content script announces itself (tabfader:alive) only AFTER it applied its stored
+  // decision, so once seen, "did nothing" is a real observation, not an early look.
+  await ext.context.addInitScript(() => {
+    document.addEventListener('tabfader:alive', () => {
+      (window as unknown as { __tabfaderAlive: boolean }).__tabfaderAlive = true;
+    });
+  });
   const page = await ext.openPlaying(site.granted('Own volume', { vol: '0.5' }));
-  // Proves the content script is live on this page before asserting it did nothing.
-  const popup = await ext.openPopup();
-  await expect(row(popup, 'Own volume').getByRole('slider', { name: 'Volume' })).toBeVisible();
-  await page.waitForTimeout(1500);
+  await page.waitForFunction(() => (window as unknown as { __tabfaderAlive?: boolean }).__tabfaderAlive === true);
 
   expect(await media(page).volume()).toBe(0.5);
 });
 
-// REVIEW BUG (2026-11-06): players that reuse one element (YouTube) re-assign .volume on
+// NOTE: review bug (2026-11-06): players that reuse one element (YouTube) re-assign .volume on
 // each new video, silently undoing the user's choice.
 test('a page override is re-enforced to the chosen volume', async ({ ext, site }) => {
   const page = await ext.openPlaying(site.granted('Override'));

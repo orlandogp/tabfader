@@ -91,7 +91,7 @@ async function deliverVolume(tabId: number, volume: number): Promise<void> {
   try {
     await browser.tabs.sendMessage(tabId, { type: 'applyVolume', volume });
   } catch {
-    // No live listener in the tab: the script was never injected there, or
+    // NOTE: No live listener in the tab: the script was never injected there, or
     // an extension reload/update ORPHANED it (its message channel dies but
     // its MutationObserver keeps enforcing the stale volume). Inject a
     // fresh script now — it applies the just-stored volume on startup and
@@ -137,7 +137,7 @@ export async function listTabs(keep: number[] = []): Promise<AudibleTab[]> {
         (t): t is AudibleTab =>
           t !== null && (t.audible || t.muted || zeroedOrigins.has(t.origin) || kept.has(t.id)),
       )
-      // Stable, category-independent order (tab creation order): rows must not jump
+      // NOTE: Stable, category-independent order (tab creation order): rows must not jump
       // while the user drags a slider and the `audible` flag flips under the cursor.
       .sort((a, b) => a.id - b.id)
   );
@@ -154,19 +154,19 @@ export async function handleMessage(
       await setTabMuted(msg.tabId, msg.muted);
       return;
     case 'muteAll': {
-      // Toggle semantics: the popup decides the target state (true = mute
-      // everything, false = unmute everything) for exactly the tabs it lists.
-      const tabs = await listTabs();
+      // NOTE: toggle semantics: the popup decides the target state (true = mute
+      // everything, false = unmute everything) for exactly the rows it shows.
+      const tabs = await listTabs(msg.keep);
       await Promise.all(tabs.map((t) => setTabMuted(t.id, msg.muted)));
       return;
     }
     case 'setVolume': {
       await setSiteVolume(msg.origin, msg.volume);
-      // Volume is stored per origin, so every open tab of the origin follows it.
+      // NOTE: Volume is stored per origin, so every open tab of the origin follows it.
       const siteTabs = await browser.tabs.query({ url: matchPatternForOrigin(msg.origin) });
       const tabIds = new Set([msg.tabId]);
       for (const tab of siteTabs) {
-        // The match pattern ignores ports and may match more than the stored host key.
+        // NOTE: The match pattern ignores ports and may match more than the stored host key.
         if (tab.id != null && tab.url && originKeyFromUrl(tab.url) === msg.origin) tabIds.add(tab.id);
       }
       await Promise.all([...tabIds].map((tabId) => deliverVolume(tabId, msg.volume)));

@@ -5,7 +5,8 @@ export type BackgroundMessage =
   /** `keep`: tab ids the open popup already shows; listed while they still exist. */
   | { type: 'list'; keep?: number[] }
   | { type: 'toggleMute'; tabId: number; muted: boolean }
-  | { type: 'muteAll'; muted: boolean }
+  /** `keep`: the rows the popup shows, so silent ones it still lists are reached too. */
+  | { type: 'muteAll'; muted: boolean; keep?: number[] }
   | { type: 'setVolume'; tabId: number; origin: string; volume: number }
   | { type: 'grantSite'; tabId: number; origin: string };
 
