@@ -5,6 +5,8 @@ export interface AudibleTab {
   origin: string;
   favIconUrl?: string;
   muted: boolean;
+  /** Producing sound right now (Chrome clears it ~2.5s after the sound stops). */
+  audible: boolean;
 }
 
 export interface SitePref {

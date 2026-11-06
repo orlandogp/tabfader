@@ -44,6 +44,40 @@ test('Mute all mutes every audible tab in the browser', async ({ ext, site }) =>
   await expect(popup.getByRole('button', { name: UNMUTE_ALL })).toBeVisible();
 });
 
+// FIELD BUG (2026-11-06): Chrome clears `audible` ~2.5s after a tab goes quiet, muted
+// or not, so a muted tab whose site stopped playing vanished and could not be unmuted.
+test('a muted tab stays listed after its audio stops and can be unmuted from the popup', async ({ ext, site }) => {
+  const page = await ext.openPlaying(site.granted('Muted then paused'));
+  const popup = await ext.openPopup();
+  const r = row(popup, 'Muted then paused');
+  await r.getByRole('button', { name: 'Mute', exact: true }).click();
+  await expect.poll(async () => (await ext.tabState(page)).muted).toBe(true);
+
+  await media(page).pause();
+  await ext.waitAudible(page, false);
+
+  // Reopen too: the fix must not depend on the popup having seen the tab before.
+  const fresh = await ext.openPopup();
+  for (const p of [popup, fresh]) await expect(row(p, 'Muted then paused')).toBeVisible();
+  await row(fresh, 'Muted then paused').getByRole('button', { name: 'Unmute', exact: true }).click();
+  await expect.poll(async () => (await ext.tabState(page)).muted).toBe(false);
+});
+
+test('Unmute all reaches a muted tab that went silent', async ({ ext, site }) => {
+  const quiet = await ext.openPlaying(site.granted('Quiet one'));
+  const loud = await ext.openPlaying(site.granted('Loud one'));
+  const popup = await ext.openPopup();
+  await popup.getByRole('button', { name: MUTE_ALL }).click();
+  await expect.poll(async () => (await ext.tabState(quiet)).muted).toBe(true);
+  await media(quiet).pause();
+  await ext.waitAudible(quiet, false);
+
+  await popup.getByRole('button', { name: UNMUTE_ALL }).click();
+
+  await expect.poll(async () => (await ext.tabState(quiet)).muted).toBe(false);
+  await expect.poll(async () => (await ext.tabState(loud)).muted).toBe(false);
+});
+
 test('the footer links to the source repository from the manifest', async ({ ext }) => {
   const popup = await ext.openPopup();
   await expect(popup.getByRole('link', { name: /open source/i })).toHaveAttribute(

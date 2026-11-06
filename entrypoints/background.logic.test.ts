@@ -2,22 +2,68 @@ import { describe, it, expect, vi } from 'vitest';
 import { fakeBrowser } from 'wxt/testing';
 import { handleMessage, reregisterGrantedOrigins, handlePermissionsAdded } from './background';
 
-describe('handleMessage', () => {
-  it('list returns audible tabs', async () => {
-    // NOTE (resolution 2): fakeBrowser methods are plain functions, not vitest mocks —
-    // `.mockImplementation` doesn't exist on them. Assign a `vi.fn()` directly instead
-    // (established in Tasks 6-8, e.g. lib/audible-tabs.test.ts).
-    // fake-browser has no permissions.getAll implementation — the list handler
-    // sweeps granted origins for zero-volume sites, so stub it empty here.
-    fakeBrowser.permissions.getAll = vi.fn(async () => ({ origins: [], permissions: [] })) as any;
-    fakeBrowser.tabs.query = vi.fn(async () => [
-      { id: 3, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: false } } as chrome.tabs.Tab,
-    ]) as any;
+// NOTE: fakeBrowser methods are plain functions, not vitest mocks — assign a `vi.fn()`
+// directly. fake-browser has no permissions.getAll, so every list test stubs it.
+function openTabs(tabs: Partial<chrome.tabs.Tab>[], grantedOrigins: string[] = []) {
+  fakeBrowser.tabs.query = vi.fn(async () => tabs as chrome.tabs.Tab[]) as any;
+  fakeBrowser.permissions.getAll = vi.fn(async () => ({ origins: grantedOrigins, permissions: [] })) as any;
+  fakeBrowser.tabs.update = vi.fn() as any;
+}
+
+describe('list', () => {
+  it('returns an audible tab with its flags', async () => {
+    openTabs([{ id: 3, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: false } }]);
     const res = await handleMessage({ type: 'list' }, {} as any);
     expect(res).toEqual([
-      { id: 3, title: 'A', url: 'https://a.com/x', origin: 'a.com', favIconUrl: undefined, muted: false },
+      { id: 3, title: 'A', url: 'https://a.com/x', origin: 'a.com', favIconUrl: undefined, muted: false, audible: true },
     ]);
   });
+
+  // FIELD BUG (2026-11-06): Chrome clears `audible` ~2.5s after a tab stops producing
+  // sound, muted or not. A muted tab whose site went quiet vanished from the list and
+  // could only be unmuted from the tab itself.
+  it('includes a muted tab that is no longer audible', async () => {
+    openTabs([{ id: 4, url: 'https://a.com/x', title: 'A', audible: false, mutedInfo: { muted: true } }]);
+    const res = await handleMessage({ type: 'list' }, {} as any);
+    expect(res).toEqual([
+      { id: 4, title: 'A', url: 'https://a.com/x', origin: 'a.com', favIconUrl: undefined, muted: true, audible: false },
+    ]);
+  });
+
+  it('leaves out a silent, unmuted tab', async () => {
+    openTabs([{ id: 5, url: 'https://a.com/x', title: 'A', audible: false, mutedInfo: { muted: false } }]);
+    expect(await handleMessage({ type: 'list' }, {} as any)).toEqual([]);
+  });
+
+  it('leaves out a muted tab on an unsupported page', async () => {
+    openTabs([{ id: 6, url: 'chrome://settings', title: 'S', audible: false, mutedInfo: { muted: true } }]);
+    expect(await handleMessage({ type: 'list' }, {} as any)).toEqual([]);
+  });
+});
+
+describe('muteAll', () => {
+  it('unmutes a muted tab that has gone silent', async () => {
+    openTabs([
+      { id: 1, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: true } },
+      { id: 4, url: 'https://b.com/y', title: 'B', audible: false, mutedInfo: { muted: true } },
+    ]);
+    await handleMessage({ type: 'muteAll', muted: false }, {} as any);
+    expect(fakeBrowser.tabs.update).toHaveBeenCalledWith(1, { muted: false });
+    expect(fakeBrowser.tabs.update).toHaveBeenCalledWith(4, { muted: false });
+  });
+
+  it('never touches a silent, unmuted tab that is not listed', async () => {
+    openTabs([
+      { id: 1, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: false } },
+      { id: 5, url: 'https://b.com/y', title: 'B', audible: false, mutedInfo: { muted: false } },
+    ]);
+    await handleMessage({ type: 'muteAll', muted: true }, {} as any);
+    expect(fakeBrowser.tabs.update).toHaveBeenCalledWith(1, { muted: true });
+    expect(fakeBrowser.tabs.update).not.toHaveBeenCalledWith(5, expect.anything());
+  });
+});
+
+describe('handleMessage', () => {
 
   it('toggleMute mutes the tab', async () => {
     // NOTE (resolution 4): fake-browser's tabs.update doesn't persist mutedInfo (it
@@ -27,18 +73,6 @@ describe('handleMessage', () => {
     fakeBrowser.tabs.update = vi.fn() as any;
     await handleMessage({ type: 'toggleMute', tabId: 5, muted: true }, {} as any);
     expect(fakeBrowser.tabs.update).toHaveBeenCalledWith(5, { muted: true });
-  });
-
-  it('muteAll applies the requested muted state to every audible tab', async () => {
-    fakeBrowser.tabs.query = vi.fn(async () => [
-      { id: 1, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: true } } as chrome.tabs.Tab,
-      { id: 2, url: 'https://b.com/y', title: 'B', audible: true, mutedInfo: { muted: true } } as chrome.tabs.Tab,
-    ]) as any;
-    fakeBrowser.tabs.update = vi.fn() as any;
-    // toggle semantics: the popup decides the target state; false = unmute all
-    await handleMessage({ type: 'muteAll', muted: false }, {} as any);
-    expect(fakeBrowser.tabs.update).toHaveBeenCalledWith(1, { muted: false });
-    expect(fakeBrowser.tabs.update).toHaveBeenCalledWith(2, { muted: false });
   });
 
   it('setVolume persists the volume and messages the tab', async () => {
@@ -137,34 +171,38 @@ describe('zero-volume origins stay listed', () => {
   it('lists open tabs of a granted origin stored at 0% even when silent', async () => {
     const { setSiteVolume } = await import('@/lib/storage');
     await setSiteVolume('a.com', 0);
-    fakeBrowser.permissions.getAll = vi.fn(async () => ({
-      origins: ['*://a.com/*'],
-      permissions: [],
-    })) as any;
-    fakeBrowser.tabs.query = vi.fn(async (q: any) =>
-      q?.audible ? [] : [{ id: 7, url: 'https://a.com/x', title: 'A', mutedInfo: { muted: false } } as chrome.tabs.Tab],
-    ) as any;
+    openTabs([{ id: 7, url: 'https://a.com/x', title: 'A', audible: false, mutedInfo: { muted: false } }], ['*://a.com/*']);
 
     const res = await handleMessage({ type: 'list' }, {} as any);
     expect(res).toEqual([
-      { id: 7, title: 'A', url: 'https://a.com/x', origin: 'a.com', favIconUrl: undefined, muted: false },
+      { id: 7, title: 'A', url: 'https://a.com/x', origin: 'a.com', favIconUrl: undefined, muted: false, audible: false },
     ]);
-    expect(fakeBrowser.tabs.query).toHaveBeenCalledWith({ url: '*://a.com/*' });
   });
 
   it('does not force-list the origin once its volume is above 0', async () => {
     const { setSiteVolume } = await import('@/lib/storage');
     await setSiteVolume('a.com', 0.5);
-    fakeBrowser.permissions.getAll = vi.fn(async () => ({
-      origins: ['*://a.com/*'],
-      permissions: [],
-    })) as any;
-    fakeBrowser.tabs.query = vi.fn(async () => []) as any;
+    openTabs([{ id: 7, url: 'https://a.com/x', title: 'A', audible: false, mutedInfo: { muted: false } }], ['*://a.com/*']);
 
-    const res = await handleMessage({ type: 'list' }, {} as any);
-    expect(res).toEqual([]);
-    // only the audible query ran — no per-origin tab sweep
-    expect(fakeBrowser.tabs.query).toHaveBeenCalledTimes(1);
+    expect(await handleMessage({ type: 'list' }, {} as any)).toEqual([]);
+  });
+
+  it('does not force-list a 0% origin whose permission was revoked', async () => {
+    // Without the permission the content script no longer silences the tab, so it is
+    // just a quiet tab like any other.
+    const { setSiteVolume } = await import('@/lib/storage');
+    await setSiteVolume('a.com', 0);
+    openTabs([{ id: 7, url: 'https://a.com/x', title: 'A', audible: false, mutedInfo: { muted: false } }], []);
+
+    expect(await handleMessage({ type: 'list' }, {} as any)).toEqual([]);
+  });
+
+  it('does not force-list a subdomain of a 0% origin', async () => {
+    const { setSiteVolume } = await import('@/lib/storage');
+    await setSiteVolume('a.com', 0);
+    openTabs([{ id: 8, url: 'https://sub.a.com/x', title: 'S', audible: false, mutedInfo: { muted: false } }], ['*://a.com/*']);
+
+    expect(await handleMessage({ type: 'list' }, {} as any)).toEqual([]);
   });
 
   it('returns a stable order (by tab id) regardless of audible/zeroed category', async () => {
@@ -174,35 +212,19 @@ describe('zero-volume origins stay listed', () => {
     // category-independent: tab creation order (id).
     const { setSiteVolume } = await import('@/lib/storage');
     await setSiteVolume('a.com', 0);
-    fakeBrowser.permissions.getAll = vi.fn(async () => ({
-      origins: ['*://a.com/*'],
-      permissions: [],
-    })) as any;
-    fakeBrowser.tabs.query = vi.fn(async (q: any) =>
-      q?.audible
-        ? [{ id: 9, url: 'https://b.com/y', title: 'B', audible: true, mutedInfo: { muted: false } } as chrome.tabs.Tab]
-        : [{ id: 3, url: 'https://a.com/x', title: 'A', mutedInfo: { muted: false } } as chrome.tabs.Tab],
-    ) as any;
+    // tabs.query({}) does not promise any order; hand it the later tab first.
+    openTabs(
+      [
+        { id: 9, url: 'https://b.com/y', title: 'B', audible: true, mutedInfo: { muted: false } },
+        { id: 3, url: 'https://a.com/x', title: 'A', audible: false, mutedInfo: { muted: false } },
+      ],
+      ['*://a.com/*'],
+    );
 
     const res = (await handleMessage({ type: 'list' }, {} as any)) as Array<{ id: number }>;
     // the zeroed a.com tab (id 3) was created before the audible b.com tab
     // (id 9), so it must come FIRST even though it is not audible.
     expect(res.map((t) => t.id)).toEqual([3, 9]);
-  });
-
-  it('does not duplicate a tab that is both audible and on a zeroed origin', async () => {
-    const { setSiteVolume } = await import('@/lib/storage');
-    await setSiteVolume('a.com', 0);
-    fakeBrowser.permissions.getAll = vi.fn(async () => ({
-      origins: ['*://a.com/*'],
-      permissions: [],
-    })) as any;
-    fakeBrowser.tabs.query = vi.fn(async (q: any) => [
-      { id: 7, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: false } } as chrome.tabs.Tab,
-    ]) as any;
-
-    const res = (await handleMessage({ type: 'list' }, {} as any)) as unknown[];
-    expect(res).toHaveLength(1);
   });
 });
 

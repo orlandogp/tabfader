@@ -6,10 +6,10 @@ import { defineBackground } from '#imports';
 import { browser } from 'wxt/browser';
 import type { BackgroundMessage, BackgroundResponse } from '@/lib/messages';
 import type { AudibleTab } from '@/lib/types';
-import { queryAudibleTabs, setTabMuted } from '@/lib/audible-tabs';
+import { toAudibleTab, setTabMuted } from '@/lib/audible-tabs';
 import { getSiteVolume, setSiteVolume } from '@/lib/storage';
 import { hasOriginPermission } from '@/lib/permissions';
-import { matchPatternForOrigin, originKeyFromUrl } from '@/lib/origin';
+import { matchPatternForOrigin } from '@/lib/origin';
 
 const CONTENT_JS = 'content-scripts/content.js';
 
@@ -94,52 +94,43 @@ export async function handleCommand(command: string): Promise<void> {
   await setTabMuted(active.id, !(active.mutedInfo?.muted ?? false));
 }
 
+/**
+ * The tabs the popup lists: audible ones, muted ones (Chrome drops `audible` once a
+ * muted site goes quiet, and the user still needs the row to unmute it) and tabs of a
+ * granted origin stored at 0% (silenced by us, so never `audible`, and the user needs
+ * the slider to bring them back). Queried live: self-healing, no tracking state.
+ */
+export async function listTabs(): Promise<AudibleTab[]> {
+  const [tabs, { origins = [] }] = await Promise.all([browser.tabs.query({}), browser.permissions.getAll()]);
+  const zeroedOrigins = new Set<string>();
+  for (const pattern of origins) {
+    const host = hostFromOriginPattern(pattern);
+    if (host && (await getSiteVolume(host)) === 0) zeroedOrigins.add(host);
+  }
+  return (
+    tabs
+      .map(toAudibleTab)
+      .filter((t): t is AudibleTab => t !== null && (t.audible || t.muted || zeroedOrigins.has(t.origin)))
+      // Stable, category-independent order (tab creation order): rows must not jump
+      // while the user drags a slider and the `audible` flag flips under the cursor.
+      .sort((a, b) => a.id - b.id)
+  );
+}
+
 export async function handleMessage(
   msg: BackgroundMessage,
   _sender: chrome.runtime.MessageSender,
 ): Promise<BackgroundResponse> {
   switch (msg.type) {
-    case 'list': {
-      const audible = await queryAudibleTabs();
-      // Volume is stored PER ORIGIN, so a site left at 0% silences every tab
-      // of that origin — none of them is ever `audible`, and dropping them
-      // from the list would strand the user with no slider to recover. List
-      // every open tab of any granted origin whose stored volume is 0.
-      // Queried live (permissions + storage): self-healing, no tracking state.
-      const extras: AudibleTab[] = [];
-      const { origins = [] } = await browser.permissions.getAll();
-      for (const pattern of origins) {
-        const host = hostFromOriginPattern(pattern);
-        if (!host) continue;
-        if ((await getSiteVolume(host)) > 0) continue;
-        const tabs = await browser.tabs.query({ url: pattern });
-        for (const tab of tabs) {
-          if (tab.id == null || !tab.url) continue;
-          if (audible.some((t) => t.id === tab.id)) continue;
-          const tabOrigin = originKeyFromUrl(tab.url);
-          if (tabOrigin !== host) continue;
-          extras.push({
-            id: tab.id,
-            title: tab.title ?? tabOrigin,
-            url: tab.url,
-            origin: tabOrigin,
-            favIconUrl: tab.favIconUrl,
-            muted: tab.mutedInfo?.muted ?? false,
-          });
-        }
-      }
-      // Stable, category-independent order (tab creation order): rows must
-      // not jump between the audible and zero-volume groups while the user
-      // drags a slider and the `audible` flag flips live under their cursor.
-      return [...audible, ...extras].sort((a, b) => a.id - b.id);
-    }
+    case 'list':
+      return listTabs();
     case 'toggleMute':
       await setTabMuted(msg.tabId, msg.muted);
       return;
     case 'muteAll': {
       // Toggle semantics: the popup decides the target state (true = mute
-      // everything, false = unmute everything).
-      const tabs = await queryAudibleTabs();
+      // everything, false = unmute everything) for exactly the tabs it lists.
+      const tabs = await listTabs();
       await Promise.all(tabs.map((t) => setTabMuted(t.id, msg.muted)));
       return;
     }
