@@ -22,7 +22,7 @@ export default {
   reporters: ['html', 'clear-text', 'progress'],
   htmlReporter: { fileName: 'reports/mutation/mutation.html' },
   concurrency: 2,
-  // Baseline 2026-11-06: 96.15%. The 17 survivors left are equivalent mutants (unique
+  // Baseline 2026-11-06: 95.72%. The 20 survivors left are equivalent mutants (unique
   // request ids, constant effect deps, default arrays that can never match, fallbacks
   // whose falsy/undefined forms behave alike) or cosmetic (glyphs/whitespace inside
   // elements that already carry an accessible name).

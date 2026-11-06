@@ -11,7 +11,8 @@ Works on Chrome, Edge, Brave, Opera and Vivaldi.
 ## Develop
 - `pnpm dev` — run with hot reload
 - `pnpm test` — unit + component tests
-- `pnpm e2e` — Playwright end-to-end (`E2E_CHANNEL=msedge` runs it in the installed Edge; branded Chrome ignores `--load-extension` since 137)
+- `pnpm e2e` — Playwright end-to-end scenarios against the real browser, in Chromium and (when installed) Microsoft Edge; `pnpm e2e:chromium` runs Chromium only. Branded Chrome is not used: it ignores `--load-extension` since 137. The suite plays real audio, so it needs a headed session with an audio output device (it cannot run headless or on a machine without sound)
+- `pnpm mutation` — Stryker mutation testing over the unit + component suites (slow; run on demand). Report: `reports/mutation/mutation.html`
 - `pnpm build` / `pnpm zip` — production build / store zip
 - `pnpm icons` — regenerate the extension icons from `assets/icon.svg`
 - `pnpm store:graphics` / `pnpm store:screenshots` — Chrome Web Store assets into `docs/store/`

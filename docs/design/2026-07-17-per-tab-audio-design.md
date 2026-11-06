@@ -57,7 +57,7 @@ Los navegadores basados en Chromium (incluido Edge con su barra de medios) expon
 - **Sección "Sonando ahora":** lista las pestañas audibles, las silenciadas (aunque ya no suenen) y las de sitios bajados a 0%, con ícono, título y dominio. Se actualiza en vivo. Con el panel abierto, una fila que deja de sonar **no desaparece**: queda atenuada ("silent") hasta que su pestaña se cierre.
 - **Por cada fila:**
   - Botón **mute/unmute** — siempre disponible, sin permisos.
-  - Si el sitio tiene permiso concedido: **slider de volumen 0–100%** + porcentaje.
+  - Si el sitio tiene permiso concedido: **slider de volumen 0–100%** + porcentaje. Si el usuario aún no eligió volumen para el sitio, el slider muestra el volumen **real** de la página (se lo pregunta al content script), así el primer ajuste parte de donde suena.
   - Si no tiene permiso: chip **"Controlar volumen aquí →"** que dispara el opt-in.
   - Indicador de estado (sonando / silenciado).
 - **Pie:** línea de confianza ("🔒 Todo local · Sin recolección de datos · Open source") + enlace de donación.
@@ -147,7 +147,8 @@ Descartados: **CRXJS** (mantenimiento estancado 2025–2026) y **Plasmo** (super
 | Usuario deniega el permiso | El sitio queda en modo solo-mute. |
 | Sitio con DRM | `.volume` atenúa/silencia normal; sin boost (que de todos modos no existe en v1). |
 | iframe de otro origen con media | Inyección `all_frames` best-effort; si falla, mute de toda la pestaña sigue disponible. |
-| Media en shadow DOM o `new Audio()` sin insertar | No alcanzables con `.volume` desde el documento (ni `querySelectorAll` ni `volumechange` cruzan esos límites); queda el mute de la pestaña. |
+| Media dentro de shadow DOM **abierto** (reproductores hechos como web components) | Soportada: el content script entra a cada shadow root abierto y lo vigila por separado (su `volumechange` no llega al documento). |
+| Media en shadow DOM **cerrado** o `new Audio()` sin insertar | No alcanzable desde el mundo aislado del content script. Alcanzarla exigiría inyectar código en el mundo de la página (`world: 'MAIN'`), visible y manipulable por el sitio; se descarta para v1 por confianza (decisión 2026-11-06). Queda el mute de la pestaña. |
 | Pestaña cerrada | Se retira de la lista (`onRemoved`). |
 | Pestaña deja de sonar | Con el panel abierto, queda atenuada ("silent"); al reabrir el panel solo aparece si está silenciada o a 0%. |
 | Pestaña silenciada que deja de sonar | **Permanece en la lista** para poder reactivarla desde el panel (bug hallado en prueba de campo, 2026-11-06). |

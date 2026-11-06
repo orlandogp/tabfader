@@ -140,6 +140,7 @@ describe('handleMessage', () => {
       unregisterContentScripts: vi.fn(async () => undefined),
       executeScript: vi.fn(async () => [] as any),
     };
+    fakeBrowser.tabs.query = vi.fn(async () => [{ id: 9, url: 'https://a.com/x' }] as chrome.tabs.Tab[]) as any;
     await handleMessage({ type: 'setVolume', tabId: 9, origin: 'a.com', volume: 0.5 }, {} as any);
     const { getSiteVolume } = await import('@/lib/storage');
     expect(await getSiteVolume('a.com')).toBe(0.5);
@@ -150,13 +151,13 @@ describe('handleMessage', () => {
 
   // NOTE: review bug (2026-11-06): volume is stored per origin, but only the tab whose slider
   // moved got the message; a second tab of the same site kept playing at the old level.
-  it('setVolume applies to every open tab of the origin, and only that origin', async () => {
+  it('setVolume applies to every open tab of the origin', async () => {
     fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
     (fakeBrowser as any).scripting = { executeScript: vi.fn(async () => [] as any) };
+    // `*://a.com/*` is what Chrome matches: every a.com tab (any port), never sub.a.com.
     fakeBrowser.tabs.query = vi.fn(async () => [
       { id: 1, url: 'https://a.com/one' },
       { id: 2, url: 'https://a.com/two' },
-      { id: 3, url: 'https://sub.a.com/x' },
     ] as chrome.tabs.Tab[]) as any;
 
     await handleMessage({ type: 'setVolume', tabId: 1, origin: 'a.com', volume: 0.3 }, {} as any);
@@ -175,18 +176,21 @@ describe('handleMessage', () => {
     await handleMessage({ type: 'setVolume', tabId: 1, origin: 'a.com', volume: 0.3 }, {} as any);
 
     const recipients = (fakeBrowser.tabs.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(([id]) => id);
-    expect(recipients).toEqual([1]);
+    expect(recipients).toEqual([]);
   });
 
-  it('setVolume still reaches the slider tab when the origin query misses it', async () => {
+  // NOTE: review finding (2026-11-06): the slider's tab id was messaged unconditionally;
+  // if that tab had just navigated to another granted site (row not refreshed yet), the
+  // new site got the old site's volume.
+  it('setVolume leaves the slider tab alone once it navigated to another site', async () => {
     fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
     (fakeBrowser as any).scripting = { executeScript: vi.fn(async () => [] as any) };
-    fakeBrowser.tabs.query = vi.fn(async () => [] as chrome.tabs.Tab[]) as any;
+    fakeBrowser.tabs.query = vi.fn(async () => [{ id: 2, url: 'https://a.com/two' }] as chrome.tabs.Tab[]) as any;
 
-    await handleMessage({ type: 'setVolume', tabId: 9, origin: 'a.com', volume: 0.3 }, {} as any);
+    await handleMessage({ type: 'setVolume', tabId: 1, origin: 'a.com', volume: 0.3 }, {} as any);
 
-    expect(fakeBrowser.tabs.sendMessage).toHaveBeenCalledWith(9, { type: 'applyVolume', volume: 0.3 });
-    expect(fakeBrowser.tabs.sendMessage).toHaveBeenCalledTimes(1);
+    const recipients = (fakeBrowser.tabs.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(([id]) => id);
+    expect(recipients).toEqual([2]);
   });
 
   it('setVolume re-injects the content script when delivery fails', async () => {
@@ -203,6 +207,7 @@ describe('handleMessage', () => {
       unregisterContentScripts: vi.fn(async () => undefined),
       executeScript: vi.fn(async () => [] as any),
     };
+    fakeBrowser.tabs.query = vi.fn(async () => [{ id: 9, url: 'https://a.com/x' }] as chrome.tabs.Tab[]) as any;
     await handleMessage({ type: 'setVolume', tabId: 9, origin: 'a.com', volume: 1 }, {} as any);
     const { getSiteVolume } = await import('@/lib/storage');
     expect(await getSiteVolume('a.com')).toBe(1);

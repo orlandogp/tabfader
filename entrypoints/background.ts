@@ -9,7 +9,7 @@ import type { AudibleTab } from '@/lib/types';
 import { toAudibleTab, setTabMuted } from '@/lib/audible-tabs';
 import { getSiteVolume, setSiteVolume } from '@/lib/storage';
 import { hasOriginPermission } from '@/lib/permissions';
-import { matchPatternForOrigin, originKeyFromUrl } from '@/lib/origin';
+import { matchPatternForOrigin } from '@/lib/origin';
 
 const CONTENT_JS = 'content-scripts/content.js';
 
@@ -162,14 +162,12 @@ export async function handleMessage(
     }
     case 'setVolume': {
       await setSiteVolume(msg.origin, msg.volume);
-      // NOTE: Volume is stored per origin, so every open tab of the origin follows it.
+      // NOTE: volume is stored per origin, so every tab CURRENTLY on the origin follows it.
+      // `msg.tabId` is deliberately not trusted: that tab may have navigated elsewhere.
       const siteTabs = await browser.tabs.query({ url: matchPatternForOrigin(msg.origin) });
-      const tabIds = new Set([msg.tabId]);
-      for (const tab of siteTabs) {
-        // NOTE: The match pattern ignores ports and may match more than the stored host key.
-        if (tab.id != null && tab.url && originKeyFromUrl(tab.url) === msg.origin) tabIds.add(tab.id);
-      }
-      await Promise.all([...tabIds].map((tabId) => deliverVolume(tabId, msg.volume)));
+      await Promise.all(
+        siteTabs.filter((tab) => tab.id != null).map((tab) => deliverVolume(tab.id!, msg.volume)),
+      );
       return;
     }
     case 'grantSite': {

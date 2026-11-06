@@ -21,13 +21,34 @@ export function enforceVolume(el: HTMLMediaElement, volume: number): void {
   if (el.volume !== v) el.volume = v;
 }
 
-const MEDIA_SELECTOR = 'video, audio';
 
 // NOTE: a player that reuses its element re-assigns .volume about once per video; anything
 // faster is another writer enforcing its own value (a second volume extension, a "volume
 // lock" player). Past this budget we yield that element instead of ping-ponging forever.
 const MAX_REENFORCEMENTS = 5;
 const REENFORCE_WINDOW_MS = 1000;
+
+/** `node`, its descendants and, through open shadow roots, theirs (closed roots stay hidden). */
+function* deepElements(node: Element): Generator<Element> {
+  for (const el of [node, ...node.querySelectorAll('*')]) {
+    yield el;
+    if (el.shadowRoot) for (const child of el.shadowRoot.children) yield* deepElements(child);
+  }
+}
+
+/**
+ * The page's own current volume, for showing a site with no stored choice as it really
+ * plays: the playing media element's, else the first one's; null when there is no media.
+ */
+export function readPageVolume(root: Document): number | null {
+  let first: HTMLMediaElement | null = null;
+  for (const el of deepElements(root.documentElement)) {
+    if (!(el instanceof HTMLMediaElement)) continue;
+    if (!el.paused) return el.volume;
+    first ??= el;
+  }
+  return first?.volume ?? null;
+}
 
 /**
  * Keeps every media element of `root` at the volume the user chose for this site.
@@ -50,22 +71,35 @@ export function createVolumeEnforcer(root: Document) {
     if (++fight.count > MAX_REENFORCEMENTS) return; // yielded until the user picks a volume again
     enforceVolume(el, target);
   };
-  // NOTE: media events do not bubble; a capture listener on the document still sees them.
-  root.addEventListener('volumechange', onVolumeChange, true);
-
-  // NOTE: Only scans what was added, not the whole document on every mutation (chat-heavy SPAs
-  // mutate constantly).
+  // NOTE: only what was added is scanned, not the whole document on every mutation
+  // (chat-heavy SPAs mutate constantly).
   const observer = new MutationObserver((records) => {
     if (target === null) return;
-    for (const record of records) {
-      record.addedNodes.forEach((node) => {
-        if (!(node instanceof Element)) return;
-        if (node instanceof HTMLMediaElement) enforceVolume(node, target!);
-        node.querySelectorAll<HTMLMediaElement>(MEDIA_SELECTOR).forEach((el) => enforceVolume(el, target!));
-      });
-    }
+    for (const record of records) record.addedNodes.forEach(visit);
   });
-  observer.observe(root.documentElement, { childList: true, subtree: true });
+
+  // NOTE: open shadow roots are separate scopes: querySelectorAll does not enter them and
+  // their (non-composed) volumechange never reaches the document, so each one found gets
+  // its own capture listener and observation. Closed roots stay unreachable by design.
+  const scopes = new Set<Document | ShadowRoot>();
+  function watch(scope: Document | ShadowRoot) {
+    if (scopes.has(scope)) return;
+    scopes.add(scope);
+    // NOTE: media events do not bubble; a capture listener on the scope still sees them.
+    scope.addEventListener('volumechange', onVolumeChange, true);
+    observer.observe(scope instanceof Document ? scope.documentElement : scope, { childList: true, subtree: true });
+  }
+
+  /** Enforces the chosen volume (callers guarantee one) on media at or under `node`. */
+  function visit(node: Node) {
+    if (!(node instanceof Element)) return;
+    for (const el of deepElements(node)) {
+      if (el instanceof HTMLMediaElement) enforceVolume(el, target!);
+      if (el.shadowRoot) watch(el.shadowRoot);
+    }
+  }
+
+  watch(root);
 
   return {
     set(volume: number | null) {
@@ -73,13 +107,14 @@ export function createVolumeEnforcer(root: Document) {
       fights = new WeakMap(); // a fresh choice is worth fighting for again
       if (target === null) return;
       enforced = true;
-      root.querySelectorAll<HTMLMediaElement>(MEDIA_SELECTOR).forEach((el) => enforceVolume(el, target!));
+      visit(root.documentElement);
     },
     /** True once a chosen volume was applied, i.e. there is something to undo on uninstall. */
     hasEnforced: () => enforced,
     stop() {
       observer.disconnect();
-      root.removeEventListener('volumechange', onVolumeChange, true);
+      for (const scope of scopes) scope.removeEventListener('volumechange', onVolumeChange, true);
+      scopes.clear();
     },
   };
 }
@@ -151,8 +186,10 @@ export default defineContentScript({
       successorEvents: document,
     });
 
-    browser.runtime.onMessage.addListener((msg: ContentMessage) => {
+    browser.runtime.onMessage.addListener((msg: ContentMessage, _sender, sendResponse) => {
       if (msg?.type === 'applyVolume') enforcer.set(msg.volume);
+      // NOTE: only the top frame answers, so an iframe's player can't speak for the tab.
+      if (msg?.type === 'readVolume' && window === window.top) sendResponse(readPageVolume(document));
     });
   },
 });

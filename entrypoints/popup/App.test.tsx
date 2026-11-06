@@ -131,6 +131,8 @@ describe('App', () => {
     ['audible', { audible: true }],
     ['mute state', { mutedInfo: { muted: true } }],
     ['title', { title: 'Next song' }],
+    // A kept row that navigated must not keep the previous site's icon.
+    ['favicon', { favIconUrl: 'https://b.com/favicon.ico' }],
   ])('refreshes when a tab %s changes', async (_label, changeInfo) => {
     render(<App donateUrl="https://ko-fi.com/x" />);
     await waitFor(() => screen.getByText('Lofi'));
@@ -228,6 +230,47 @@ describe('App', () => {
 
     await waitFor(() => expect(screen.getByRole('slider')).toHaveValue('30'));
     expect(screen.getByText('30%')).toBeTruthy();
+  });
+
+  // NOTE: review finding (2026-11-06): a granted site with no stored choice showed 100%
+  // while the page played at its own level; the first slider touch then jumped.
+  it('a granted site with no chosen volume shows what the page really plays at', async () => {
+    fakeBrowser.permissions.contains = vi.fn(async () => true) as any;
+    fakeBrowser.tabs.sendMessage = vi.fn(async (_tabId: number, msg: any) =>
+      msg.type === 'readVolume' ? 0.5 : undefined,
+    ) as any;
+    render(<App donateUrl="https://ko-fi.com/x" />);
+
+    await waitFor(() => expect(screen.getByRole('slider')).toHaveValue('50'));
+    expect(fakeBrowser.tabs.sendMessage).toHaveBeenCalledWith(1, { type: 'readVolume' });
+  });
+
+  it('a stored choice is shown without asking the page', async () => {
+    const { setSiteVolume } = await import('@/lib/storage');
+    await setSiteVolume('youtube.com', 0.3);
+    fakeBrowser.permissions.contains = vi.fn(async () => true) as any;
+    fakeBrowser.tabs.sendMessage = vi.fn(async () => 0.5) as any;
+    render(<App donateUrl="https://ko-fi.com/x" />);
+
+    await waitFor(() => expect(screen.getByRole('slider')).toHaveValue('30'));
+    expect(fakeBrowser.tabs.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('shows 100% when the page cannot report its volume', async () => {
+    fakeBrowser.permissions.contains = vi.fn(async () => true) as any;
+    fakeBrowser.tabs.sendMessage = vi.fn(async () => {
+      throw new Error('Receiving end does not exist.');
+    }) as any;
+    render(<App donateUrl="https://ko-fi.com/x" />);
+
+    await waitFor(() => expect(screen.getByRole('slider')).toHaveValue('100'));
+  });
+
+  it('does not ask an ungranted page (no script runs there)', async () => {
+    fakeBrowser.tabs.sendMessage = vi.fn(async () => 0.5) as any;
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText(/control volume here/i));
+    expect(fakeBrowser.tabs.sendMessage).not.toHaveBeenCalled();
   });
 
   it('moving the slider shows the new volume at once and sends it for the site', async () => {

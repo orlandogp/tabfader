@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/preact';
 import { TabRow } from './TabRow';
 import type { AudibleTab } from '@/lib/types';
+// NOTE: the real popup stylesheet, so visual rules (dimming) are measured, not assumed.
+import '../style.css';
 
 const tab: AudibleTab = { id: 1, title: 'Lofi', url: 'https://youtube.com', origin: 'youtube.com', muted: false, audible: true };
 
@@ -50,6 +52,29 @@ describe('TabRow', () => {
     const { container, getByText } = renderRow({ audible: false });
     expect(container.querySelector('.tab-row')).toHaveClass('quiet');
     expect(getByText('youtube.com · silent')).toBeTruthy();
+  });
+
+  // NOTE: review finding (2026-11-06): dimming the whole row made the slider and the mute
+  // button look disabled while they still work.
+  it('dims only the title of a silent row, never its controls', () => {
+    const { getByRole, getByText } = render(
+      <TabRow
+        tab={{ ...tab, audible: false }}
+        granted={true}
+        volume={0.5}
+        onToggleMute={() => {}}
+        onUnlock={() => {}}
+        onVolume={() => {}}
+      />,
+    );
+    const effectiveOpacity = (el: Element | null) => {
+      let o = 1;
+      for (; el; el = el.parentElement) o *= Number(getComputedStyle(el).opacity);
+      return o;
+    };
+    expect(effectiveOpacity(getByRole('slider'))).toBe(1);
+    expect(effectiveOpacity(getByRole('button', { name: 'Mute Lofi' }))).toBe(1);
+    expect(effectiveOpacity(getByText('Lofi'))).toBeLessThan(1);
   });
 
   it('does not dim a row that is playing', () => {

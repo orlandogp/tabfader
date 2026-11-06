@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { applyVolumeToMedia, createVolumeEnforcer, enforceVolume, watchExtensionLiveness } from './content';
+import { applyVolumeToMedia, createVolumeEnforcer, enforceVolume, readPageVolume, watchExtensionLiveness } from './content';
 
 describe('applyVolumeToMedia', () => {
   it('sets .volume on all audio/video elements and counts them', () => {
@@ -231,6 +231,70 @@ describe('createVolumeEnforcer', () => {
     }
   });
 
+  // NOTE: review finding (2026-11-06): players built as web components (e.g. Reddit's)
+  // keep their <video> inside an open shadow root, which querySelectorAll does not enter
+  // and whose non-composed volumechange never reaches the document.
+  describe('inside open shadow roots', () => {
+    function shadowHost(inner: string) {
+      const host = document.createElement('div');
+      host.attachShadow({ mode: 'open' }).innerHTML = inner;
+      return host;
+    }
+    const shadowAudio = (host: Element) => host.shadowRoot!.querySelector('audio') as HTMLAudioElement;
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+
+    it('applies the chosen volume to existing shadow media, even nested', () => {
+      const enforcer = setup('');
+      const outer = shadowHost('<span></span>');
+      const inner = shadowHost('<audio></audio>');
+      outer.shadowRoot!.appendChild(inner);
+      document.body.appendChild(outer);
+
+      enforcer.set(0.3);
+
+      expect(shadowAudio(inner).volume).toBe(0.3);
+    });
+
+    it('applies it to a player component added later', async () => {
+      const enforcer = setup('');
+      enforcer.set(0.3);
+      const host = shadowHost('<audio></audio>');
+      document.body.appendChild(host);
+      await tick();
+      expect(shadowAudio(host).volume).toBe(0.3);
+    });
+
+    it('applies it to media the component adds to its shadow root later', async () => {
+      const enforcer = setup('');
+      const host = shadowHost('');
+      document.body.appendChild(host);
+      enforcer.set(0.3);
+      const late = document.createElement('audio');
+      host.shadowRoot!.appendChild(late);
+      await tick();
+      expect(late.volume).toBe(0.3);
+    });
+
+    it('re-enforces when the component overrides its own volume', () => {
+      const enforcer = setup('');
+      const host = shadowHost('<audio></audio>');
+      document.body.appendChild(host);
+      enforcer.set(0.3);
+      pageSetsVolume(shadowAudio(host), 1);
+      expect(shadowAudio(host).volume).toBe(0.3);
+    });
+
+    it('stops re-enforcing inside shadow roots after stop()', () => {
+      const enforcer = setup('');
+      const host = shadowHost('<audio></audio>');
+      document.body.appendChild(host);
+      enforcer.set(0.3);
+      enforcer.stop();
+      pageSetsVolume(shadowAudio(host), 1);
+      expect(shadowAudio(host).volume).toBe(1);
+    });
+  });
+
   it('stops enforcing after stop()', () => {
     const enforcer = setup('<audio></audio>');
     enforcer.set(0.3);
@@ -244,6 +308,41 @@ describe('createVolumeEnforcer', () => {
     expect(enforcer.hasEnforced()).toBe(false);
     enforcer.set(0.3);
     expect(enforcer.hasEnforced()).toBe(true);
+  });
+});
+
+// NOTE: review finding (2026-11-06): with no stored preference the popup showed 100% while
+// the page played at its own level, and the first slider touch jumped the volume.
+describe('readPageVolume', () => {
+  const playing = (el: HTMLMediaElement) => Object.defineProperty(el, 'paused', { get: () => false });
+
+  it('reports null when the page has no media', () => {
+    document.body.innerHTML = '<div></div>';
+    expect(readPageVolume(document)).toBeNull();
+  });
+
+  it('prefers the media element that is playing', () => {
+    document.body.innerHTML = '<audio id="idle"></audio><video id="live"></video>';
+    (document.getElementById('idle') as HTMLMediaElement).volume = 0.9;
+    const live = document.getElementById('live') as HTMLMediaElement;
+    live.volume = 0.5;
+    playing(live);
+    expect(readPageVolume(document)).toBe(0.5);
+  });
+
+  it('falls back to the first media element when none is playing', () => {
+    document.body.innerHTML = '<audio></audio><audio></audio>';
+    (document.querySelector('audio') as HTMLMediaElement).volume = 0.4;
+    expect(readPageVolume(document)).toBe(0.4);
+  });
+
+  it('finds a player inside an open shadow root', () => {
+    document.body.innerHTML = '';
+    const host = document.createElement('div');
+    host.attachShadow({ mode: 'open' }).innerHTML = '<audio></audio>';
+    document.body.appendChild(host);
+    (host.shadowRoot!.querySelector('audio') as HTMLMediaElement).volume = 0.7;
+    expect(readPageVolume(document)).toBe(0.7);
   });
 });
 

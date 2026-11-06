@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { browser } from 'wxt/browser';
 import type { AudibleTab } from '@/lib/types';
-import { sendToBackground } from '@/lib/messages';
+import { readTabVolume, sendToBackground } from '@/lib/messages';
 import { hasOriginPermission, requestOriginPermission } from '@/lib/permissions';
-import { getSiteVolume } from '@/lib/storage';
+import { getSitePref } from '@/lib/storage';
 import { DEFAULT_VOLUME } from '@/lib/volume';
 import { TabRow } from './components/TabRow';
 import { DonationFooter } from './components/DonationFooter';
@@ -14,7 +14,11 @@ interface TabChangeInfo {
   audible?: boolean;
   mutedInfo?: unknown;
   title?: string;
+  favIconUrl?: string;
 }
+
+// NOTE: the tab fields a row displays or that decide whether the tab is listed.
+const LIST_FIELDS = ['audible', 'mutedInfo', 'title', 'favIconUrl'] as const;
 
 interface RowState { granted: boolean; volume: number }
 
@@ -25,9 +29,12 @@ interface PanelState {
   loaded: boolean;
 }
 
-async function loadRowState(origin: string): Promise<[string, RowState]> {
+async function loadRowState(origin: string, tabId: number): Promise<[string, RowState]> {
   try {
-    const [granted, volume] = await Promise.all([hasOriginPermission(origin), getSiteVolume(origin)]);
+    const [granted, pref] = await Promise.all([hasOriginPermission(origin), getSitePref(origin)]);
+    // NOTE: with no stored choice the page plays at its own level; show that, so the
+    // slider starts where the sound really is instead of a made-up 100%.
+    const volume = pref?.volume ?? (granted ? await readTabVolume(tabId) : null) ?? DEFAULT_VOLUME;
     return [origin, { granted, volume }];
   } catch {
     // NOTE: one origin the browser refuses to look up must not blank the whole panel:
@@ -54,8 +61,11 @@ export function App({ donateUrl, repoUrl }: { donateUrl: string; repoUrl?: strin
     // NOTE: no list (the background failed or is restarting): keep what is on screen; the
     // next tab event retries.
     if (!Array.isArray(list)) return;
-    const origins = [...new Set(list.map((t) => t.origin))];
-    const rowState = Object.fromEntries(await Promise.all(origins.map(loadRowState)));
+    const firstTabOfOrigin = new Map<string, number>();
+    for (const t of list) if (!firstTabOfOrigin.has(t.origin)) firstTabOfOrigin.set(t.origin, t.id);
+    const rowState = Object.fromEntries(
+      await Promise.all([...firstTabOfOrigin].map(([origin, tabId]) => loadRowState(origin, tabId))),
+    );
     if (request < lastApplied.current) return;
     lastApplied.current = request;
     // NOTE: storage may not hold the slider's latest value yet; what the user just set wins.
@@ -71,7 +81,7 @@ export function App({ donateUrl, repoUrl }: { donateUrl: string; repoUrl?: strin
     // The popup page has direct chrome API access, so while it's open we keep
     // the list live instead of only snapshotting it once on mount.
     const onTabUpdated = (_tabId: number, changeInfo: TabChangeInfo) => {
-      if (changeInfo.audible !== undefined || changeInfo.mutedInfo !== undefined || changeInfo.title !== undefined) {
+      if (LIST_FIELDS.some((field) => changeInfo[field] !== undefined)) {
         refresh();
       }
     };
