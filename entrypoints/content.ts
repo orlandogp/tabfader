@@ -1,7 +1,7 @@
 import { defineContentScript } from '#imports';
 import { browser } from 'wxt/browser';
 import type { ContentMessage } from '@/lib/messages';
-import { getSiteVolume } from '@/lib/storage';
+import { getSitePref } from '@/lib/storage';
 import { originKeyFromUrl } from '@/lib/origin';
 import { clampVolume } from '@/lib/volume';
 
@@ -13,6 +13,60 @@ export function applyVolumeToMedia(root: ParentNode, volume: number): number {
     (el as HTMLMediaElement).volume = v;
   });
   return media.length;
+}
+
+/** Sets `.volume` only when it differs: every write fires `volumechange`, which we listen to. */
+export function enforceVolume(el: HTMLMediaElement, volume: number): void {
+  const v = clampVolume(volume);
+  if (el.volume !== v) el.volume = v;
+}
+
+const MEDIA_SELECTOR = 'video, audio';
+
+/**
+ * Keeps every media element of `root` at the volume the user chose for this site.
+ * `set(null)` = no choice yet: the page keeps full control of its own volume. Once a
+ * volume is chosen it wins, including over the page re-assigning `.volume` itself
+ * (players that reuse one element do that on every new video).
+ */
+export function createVolumeEnforcer(root: Document) {
+  let target: number | null = null;
+  let enforced = false;
+
+  const onVolumeChange = (event: Event) => {
+    if (target !== null && event.target instanceof HTMLMediaElement) enforceVolume(event.target, target);
+  };
+  // NOTE: media events do not bubble; a capture listener on the document still sees them.
+  root.addEventListener('volumechange', onVolumeChange, true);
+
+  // Only scans what was added, not the whole document on every mutation (chat-heavy SPAs
+  // mutate constantly).
+  const observer = new MutationObserver((records) => {
+    if (target === null) return;
+    for (const record of records) {
+      record.addedNodes.forEach((node) => {
+        if (!(node instanceof Element)) return;
+        if (node instanceof HTMLMediaElement) enforceVolume(node, target!);
+        node.querySelectorAll<HTMLMediaElement>(MEDIA_SELECTOR).forEach((el) => enforceVolume(el, target!));
+      });
+    }
+  });
+  observer.observe(root.documentElement, { childList: true, subtree: true });
+
+  return {
+    set(volume: number | null) {
+      target = volume === null ? null : clampVolume(volume);
+      if (target === null) return;
+      enforced = true;
+      root.querySelectorAll<HTMLMediaElement>(MEDIA_SELECTOR).forEach((el) => enforceVolume(el, target!));
+    },
+    /** True once a chosen volume was applied, i.e. there is something to undo on uninstall. */
+    hasEnforced: () => enforced,
+    stop() {
+      observer.disconnect();
+      root.removeEventListener('volumechange', onVolumeChange, true);
+    },
+  };
 }
 
 /** DOM event a fresh copy of this script dispatches so orphans know a successor exists. */
@@ -57,18 +111,15 @@ export default defineContentScript({
   allFrames: true,
   async main(ctx) {
     const origin = originKeyFromUrl(location.href);
-    let current = origin ? await getSiteVolume(origin) : 1;
+    const enforcer = createVolumeEnforcer(document);
+    enforcer.set(origin ? ((await getSitePref(origin))?.volume ?? null) : null);
 
-    applyVolumeToMedia(document, current);
-
-    const observer = new MutationObserver(() => applyVolumeToMedia(document, current));
-    observer.observe(document.documentElement, { childList: true, subtree: true });
     // Extension reloads/updates orphan this script: its runtime channel dies
-    // but the observer would keep re-applying a stale volume forever, fighting
+    // but it would keep re-applying a stale volume forever, fighting
     // the fresh script injected by the new extension version. WXT invalidates
     // the context when a newer copy starts (script-started handshake) — stop
     // enforcing the moment that happens.
-    ctx.onInvalidated(() => observer.disconnect());
+    ctx.onInvalidated(() => enforcer.stop());
 
     // Announce this copy to any orphaned predecessors, then self-monitor:
     // if the extension dies and NO successor shows up (uninstall, not update),
@@ -76,16 +127,15 @@ export default defineContentScript({
     document.dispatchEvent(new CustomEvent(ALIVE_EVENT));
     watchExtensionLiveness({
       isAlive: () => Boolean(browser.runtime?.id),
-      onOrphaned: () => observer.disconnect(),
-      onUninstalled: () => applyVolumeToMedia(document, 1),
+      onOrphaned: () => enforcer.stop(),
+      onUninstalled: () => {
+        if (enforcer.hasEnforced()) applyVolumeToMedia(document, 1);
+      },
       successorEvents: document,
     });
 
     browser.runtime.onMessage.addListener((msg: ContentMessage) => {
-      if (msg?.type === 'applyVolume') {
-        current = msg.volume;
-        applyVolumeToMedia(document, current);
-      }
+      if (msg?.type === 'applyVolume') enforcer.set(msg.volume);
     });
   },
 });

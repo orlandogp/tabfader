@@ -25,9 +25,9 @@ export interface TabState {
 /** Media page URLs. Every call returns a UNIQUE url so `tabState` can find exactly one tab. */
 export interface Site {
   /** 127.0.0.1: host permission pre-granted by the e2e build. */
-  granted(title?: string): string;
+  granted(title?: string, params?: Record<string, string>): string;
   /** localhost: same server, never granted, so it exercises the opt-in path. */
-  ungranted(title?: string): string;
+  ungranted(title?: string, params?: Record<string, string>): string;
 }
 
 /**
@@ -194,12 +194,15 @@ export const test = base.extend<{
     const address = server.address();
     const port = address && typeof address === 'object' ? address.port : 0;
     let n = 0;
-    const url = (host: string, title?: string) => {
-      const params = new URLSearchParams({ n: String(++n) });
+    const url = (host: string, title?: string, extra: Record<string, string> = {}) => {
+      const params = new URLSearchParams({ n: String(++n), ...extra });
       if (title) params.set('title', title);
       return `http://${host}:${port}/media-page.html?${params}`;
     };
-    await use({ granted: (title) => url('127.0.0.1', title), ungranted: (title) => url('localhost', title) });
+    await use({
+      granted: (title, params) => url('127.0.0.1', title, params),
+      ungranted: (title, params) => url('localhost', title, params),
+    });
     server.closeAllConnections(); // keep-alive sockets from the browser would block close()
     await new Promise<void>((resolve) => server.close(() => resolve()));
   },

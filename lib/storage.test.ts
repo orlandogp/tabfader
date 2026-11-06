@@ -12,3 +12,18 @@ describe('site volume storage', () => {
     expect(await getSiteVolume('youtube.com')).toBe(1);
   });
 });
+
+describe('getSitePref', () => {
+  // A site the user never set a volume for must be left alone, so "no preference" has
+  // to be distinguishable from "100%".
+  it('returns null when nothing is stored', async () => {
+    const { getSitePref } = await import('./storage');
+    expect(await getSitePref('youtube.com')).toBeNull();
+  });
+
+  it('returns the stored volume, clamped', async () => {
+    const { getSitePref } = await import('./storage');
+    await setSiteVolume('youtube.com', 0.3);
+    expect(await getSitePref('youtube.com')).toEqual({ volume: 0.3 });
+  });
+});
