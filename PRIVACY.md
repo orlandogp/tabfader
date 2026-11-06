@@ -1,6 +1,6 @@
 # TabFader Privacy Policy
 
-Last updated: 2026-09-07
+Last updated: 2026-11-06
 
 TabFader is a browser extension that shows which tabs are playing sound, lets you mute
 them, and lets you set a volume level per site. It runs entirely inside your browser.
@@ -19,16 +19,18 @@ affiliate links. It makes no network requests of its own.
 
 ## What TabFader reads
 
-- Which tabs are currently playing sound, with their title, icon and site, so it can list
-  them in the popup. This is read from the browser only while the popup is open and is
+- Which tabs are currently playing sound or are muted, with their title, icon and site, so
+  it can list them in the popup. This is read from the browser only while the popup is open and is
   never stored or sent anywhere.
 - On sites where you explicitly enabled volume control, TabFader's content script adjusts
-  the volume of the media elements on the page. It does not read page content, form data
-  or anything else.
+  the volume of the media elements on the page, and reads their current volume so the
+  popup slider can show where the sound really is. It does not read page content, form
+  data or anything else, and the volume it reads is only shown in the popup, never stored
+  or sent anywhere.
 
 ## Permissions, in plain words
 
-- `tabs`: list the tabs that are playing sound and mute or unmute them. Chrome labels this
+- `tabs`: list the tabs that are playing sound (or that you muted) and mute or unmute them. Chrome labels this
   permission "Read your browsing history"; TabFader does not record or transmit any
   history.
 - `storage`: remember your per-site volume levels locally.

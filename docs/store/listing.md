@@ -31,10 +31,10 @@ Plain text, no markdown. Paste as is.
 TabFader shows every tab that is playing sound and lets you control each one from a single panel.
 
 WHAT IT DOES
-• Playing now: a live list of the tabs currently making sound, with their title and site.
+• Playing now: a live list of the tabs making sound, plus the ones you muted, so you can always unmute them from the panel. Tabs that go quiet stay put while the panel is open, so nothing jumps around.
 • Mute any tab: one click, instantly, for free. No extra permissions needed.
 • Mute all / Unmute all: silence everything and bring it back with one button.
-• Per-site volume: set a level from 0% to 100% for a site, and TabFader remembers it the next time you open that site.
+• Per-site volume: set a level from 0% to 100% for a site, and TabFader remembers it the next time you open that site, in every tab of that site. Until you choose a level, the site keeps its own volume and the slider shows it.
 • Keyboard shortcut: Alt+Shift+M mutes or unmutes the active tab.
 • Follows your browser's light or dark theme. Nothing to configure.
 
@@ -87,7 +87,7 @@ Control the audio of browser tabs: show which tabs are playing sound, mute or un
 **tabs**
 
 ```
-Needed to list the tabs that are currently playing sound (chrome.tabs.query with audible: true) and show each one's title, favicon and site, and to mute or unmute a tab (chrome.tabs.update with muted). Tab information is only displayed in the popup while it is open. Nothing is stored or transmitted.
+Needed to list the tabs that are playing sound or are muted (chrome.tabs.query, filtered to audible or muted tabs) and show each one's title, favicon and site, and to mute or unmute a tab (chrome.tabs.update with muted). Tab information is only displayed in the popup while it is open. Nothing is stored or transmitted.
 ```
 
 **storage**
@@ -99,7 +99,7 @@ Stores the volume level the user chooses for a site, keyed by the site's origin,
 **scripting**
 
 ```
-Registers and injects the extension's own small content script, which sets HTMLMediaElement.volume on a page. It only runs on sites where the user has explicitly enabled volume control and never anywhere else.
+Registers and injects the extension's own small content script, which sets HTMLMediaElement.volume on a page and reads the current value so the popup slider can show it. It only runs on sites where the user has explicitly enabled volume control and never anywhere else.
 ```
 
 **Host permission (optional_host_permissions: `*://*/*`)**
