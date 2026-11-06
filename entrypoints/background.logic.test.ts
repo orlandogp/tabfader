@@ -64,6 +64,19 @@ describe('list', () => {
     expect(await handleMessage({ type: 'list', keep: [5] }, {} as any)).toEqual([]);
   });
 
+  it('copes with a permissions answer that has no origins at all', async () => {
+    openTabs([{ id: 3, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: false } }]);
+    fakeBrowser.permissions.getAll = vi.fn(async () => ({ permissions: [] })) as any;
+    const res = (await handleMessage({ type: 'list' }, {} as any)) as Array<{ id: number }>;
+    expect(res.map((t) => t.id)).toEqual([3]);
+  });
+
+  it('ignores granted patterns that are not single-host patterns', async () => {
+    openTabs([{ id: 3, url: 'https://a.com/x', title: 'A', audible: true, mutedInfo: { muted: false } }], ['https://a.com/path/*', '<all_urls>']);
+    const res = (await handleMessage({ type: 'list' }, {} as any)) as Array<{ id: number }>;
+    expect(res.map((t) => t.id)).toEqual([3]);
+  });
+
   it('leaves out a muted tab on an unsupported page', async () => {
     openTabs([{ id: 6, url: 'chrome://settings', title: 'S', audible: false, mutedInfo: { muted: true } }]);
     expect(await handleMessage({ type: 'list' }, {} as any)).toEqual([]);
@@ -141,6 +154,17 @@ describe('handleMessage', () => {
     expect(fakeBrowser.tabs.sendMessage).toHaveBeenCalledWith(2, { type: 'applyVolume', volume: 0.3 });
   });
 
+  it('setVolume skips matching tabs that have no id', async () => {
+    fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
+    (fakeBrowser as any).scripting = { executeScript: vi.fn(async () => [] as any) };
+    fakeBrowser.tabs.query = vi.fn(async () => [{ url: 'https://a.com/one' }] as chrome.tabs.Tab[]) as any;
+
+    await handleMessage({ type: 'setVolume', tabId: 1, origin: 'a.com', volume: 0.3 }, {} as any);
+
+    const recipients = (fakeBrowser.tabs.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(([id]) => id);
+    expect(recipients).toEqual([1]);
+  });
+
   it('setVolume still reaches the slider tab when the origin query misses it', async () => {
     fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
     (fakeBrowser as any).scripting = { executeScript: vi.fn(async () => [] as any) };
@@ -190,6 +214,8 @@ describe('handleMessage', () => {
     };
     const res = await handleMessage({ type: 'grantSite', tabId: 9, origin: 'a.com' }, {} as any);
     expect(res).toEqual({ granted: true });
+    // Re-granting must not fail on the already-registered id: unregister it first.
+    expect((fakeBrowser as any).scripting.unregisterContentScripts).toHaveBeenCalledWith({ ids: ['tabfader-a.com'] });
     expect(fakeBrowser.permissions.contains).toHaveBeenCalledWith({ origins: ['*://a.com/*'] });
     expect((fakeBrowser as any).scripting.registerContentScripts).toHaveBeenCalledWith([
       {
@@ -320,6 +346,21 @@ describe('handlePermissionsAdded', () => {
       target: { tabId: 42, allFrames: true },
       files: ['content-scripts/content.js'],
     });
+  });
+
+  it('skips patterns it cannot map to a host and tabs without an id', async () => {
+    (fakeBrowser as any).scripting = {
+      registerContentScripts: vi.fn(async () => undefined),
+      unregisterContentScripts: vi.fn(async () => undefined),
+      executeScript: vi.fn(async () => [] as any),
+    };
+    fakeBrowser.tabs.query = vi.fn(async () => [{ url: 'https://a.com/watch' } as chrome.tabs.Tab]) as any;
+
+    await handlePermissionsAdded({ origins: ['https://b.com/path/*', '*://a.com/*'], permissions: [] });
+
+    const registered = (fakeBrowser as any).scripting.registerContentScripts.mock.calls.map(([[s]]: any) => s.id);
+    expect(registered).toEqual(['tabfader-a.com']);
+    expect((fakeBrowser as any).scripting.executeScript).not.toHaveBeenCalled();
   });
 
   it('does nothing when the added permission has no origins', async () => {

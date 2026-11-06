@@ -97,6 +97,36 @@ describe('createVolumeEnforcer', () => {
     expect((wrapper.querySelector('video') as HTMLVideoElement).volume).toBe(0.3);
   });
 
+  it('leaves media added later alone while no volume is chosen', async () => {
+    const enforcer = setup('');
+    enforcer.set(null);
+    const late = document.createElement('audio');
+    late.volume = 0.6;
+    document.body.appendChild(late);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(late.volume).toBe(0.6);
+  });
+
+  it('handles media appended directly, next to non-element nodes', async () => {
+    const enforcer = setup('');
+    enforcer.set(0.3);
+    document.body.appendChild(document.createTextNode('caption'));
+    const late = document.createElement('audio');
+    document.body.appendChild(late);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(late.volume).toBe(0.3);
+  });
+
+  it('stops applying the volume to media added after stop()', async () => {
+    const enforcer = setup('');
+    enforcer.set(0.3);
+    enforcer.stop();
+    const late = document.createElement('audio');
+    document.body.appendChild(late);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(late.volume).toBe(1);
+  });
+
   it('stops enforcing after stop()', () => {
     const enforcer = setup('<audio></audio>');
     enforcer.set(0.3);
@@ -147,6 +177,11 @@ describe('watchExtensionLiveness', () => {
     expect(onUninstalled).not.toHaveBeenCalled(); // still in grace window
 
     vi.advanceTimersByTime(5000);
+    expect(onUninstalled).toHaveBeenCalledTimes(1);
+
+    // Polling stops once the death is handled: nothing fires twice.
+    vi.advanceTimersByTime(30_000);
+    expect(onOrphaned).toHaveBeenCalledTimes(1);
     expect(onUninstalled).toHaveBeenCalledTimes(1);
   });
 

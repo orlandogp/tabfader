@@ -110,8 +110,8 @@ export function App({ donateUrl, repoUrl }: { donateUrl: string; repoUrl?: strin
         <TabRow
           key={t.id}
           tab={t}
-          granted={rowState[t.origin]?.granted ?? false}
-          volume={rowState[t.origin]?.volume ?? 1}
+          granted={rowState[t.origin].granted}
+          volume={rowState[t.origin].volume}
           onToggleMute={() => toggleMute(t)}
           onUnlock={() => unlock(t)}
           onVolume={(v) => setVolume(t, v)}

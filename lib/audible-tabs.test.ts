@@ -29,6 +29,13 @@ describe('toAudibleTab', () => {
     expect(toAudibleTab(tab)).toMatchObject({ title: 'a.com', muted: false, audible: true });
   });
 
+  it('treats a tab without audible/mute info as silent and unmuted', () => {
+    expect(toAudibleTab({ id: 2, url: 'https://a.com/x', title: 'A' } as chrome.tabs.Tab)).toMatchObject({
+      audible: false,
+      muted: false,
+    });
+  });
+
   it('rejects unsupported URLs (chrome://)', () => {
     expect(toAudibleTab({ id: 1, url: 'chrome://extensions', audible: true } as chrome.tabs.Tab)).toBeNull();
   });

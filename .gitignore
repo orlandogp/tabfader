@@ -22,3 +22,7 @@ e2e/.auth/
 .DS_Store
 Thumbs.db
 *.log
+
+# Mutation testing
+reports/
+.stryker-tmp/

@@ -19,6 +19,7 @@ describe('isSupportedUrl', () => {
     expect(isSupportedUrl('https://a.com')).toBe(true);
     expect(isSupportedUrl('chrome://newtab')).toBe(false);
     expect(isSupportedUrl('about:blank')).toBe(false);
+    expect(isSupportedUrl('not a url')).toBe(false);
   });
 });
 

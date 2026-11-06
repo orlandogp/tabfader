@@ -15,7 +15,8 @@
     "test:component": "vitest run --project component --passWithNoTests",
     "test:watch": "vitest",
     "e2e": "wxt build --mode e2e && playwright test",
-    "e2e:chromium": "wxt build --mode e2e && playwright test --project=chromium"
+    "e2e:chromium": "wxt build --mode e2e && playwright test --project=chromium",
+    "mutation": "stryker run"
   },
   "author": "orlandogp",
   "license": "MIT",
@@ -33,12 +34,15 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@preact/preset-vite": "^2.10.5",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/preact": "^3.2.4",
     "@vitest/browser": "^4.1.10",
     "@vitest/browser-playwright": "^4.1.10",
     "jsdom": "^29.1.1",
     "playwright": "^1.61.1",
+    "typescript": "6.0.3",
     "vitest": "^4.1.10",
     "wxt": "^0.20.27"
   },

@@ -121,9 +121,153 @@ describe('App', () => {
     render(<App donateUrl="https://ko-fi.com/x" />);
     await act(async () => {});
     expect(screen.queryByText('Nothing is playing right now.')).toBeNull();
+    expect(screen.queryAllByRole('button', { name: /^(Mute|Unmute) / })).toHaveLength(0);
 
     await act(async () => first.resolve([]));
     await waitFor(() => screen.getByText('Nothing is playing right now.'));
+  });
+
+  it.each([
+    ['audible', { audible: true }],
+    ['mute state', { mutedInfo: { muted: true } }],
+    ['title', { title: 'Next song' }],
+  ])('refreshes when a tab %s changes', async (_label, changeInfo) => {
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('Lofi'));
+
+    await act(() => fakeBrowser.tabs.onUpdated.trigger(1, changeInfo as any, {} as chrome.tabs.Tab));
+
+    await waitFor(() => expect(listCalls()).toHaveLength(2));
+  });
+
+  it('ignores tab changes that cannot affect the list (e.g. loading status)', async () => {
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('Lofi'));
+
+    await act(() => fakeBrowser.tabs.onUpdated.trigger(1, { status: 'loading' }, {} as chrome.tabs.Tab));
+    await act(() => new Promise((r) => setTimeout(r, 20)));
+
+    expect(listCalls()).toHaveLength(1);
+  });
+
+  it('refreshes when a tab is closed', async () => {
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('Lofi'));
+
+    await act(() => fakeBrowser.tabs.onRemoved.trigger(1, { windowId: 1, isWindowClosing: false }));
+
+    await waitFor(() => expect(listCalls()).toHaveLength(2));
+  });
+
+  it('stops listening to tab events once closed', async () => {
+    const { unmount } = render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('Lofi'));
+    unmount();
+
+    await act(() => fakeBrowser.tabs.onUpdated.trigger(1, { audible: false }, {} as chrome.tabs.Tab));
+    await act(() => fakeBrowser.tabs.onRemoved.trigger(1, { windowId: 1, isWindowClosing: false }));
+    await act(() => new Promise((r) => setTimeout(r, 20)));
+
+    expect(listCalls()).toHaveLength(1);
+  });
+
+  it('first asks for the list with nothing to keep', async () => {
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('Lofi'));
+    expect(listCalls()[0][0]).toEqual({ type: 'list', keep: [] });
+  });
+
+  it('hides the empty state while tabs are listed', async () => {
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('Lofi'));
+    expect(screen.queryByText('Nothing is playing right now.')).toBeNull();
+  });
+
+  it('offers Mute all (not Unmute all) when nothing is listed', async () => {
+    backgroundLists([]);
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('Nothing is playing right now.'));
+    expect(screen.getByRole('button', { name: /(^|\s)Mute all$/ })).toBeTruthy();
+  });
+
+  it('offers Mute all while only some tabs are muted', async () => {
+    backgroundLists([{ ...LOFI, muted: true }, NEWS]);
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('News'));
+    fireEvent.click(screen.getByRole('button', { name: /(^|\s)Mute all$/ }));
+    expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'muteAll', muted: true });
+  });
+
+  it('the row mute button mutes that tab and refreshes', async () => {
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('Lofi'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mute Lofi' }));
+
+    await waitFor(() => expect(listCalls()).toHaveLength(2));
+    expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'toggleMute', tabId: 1, muted: true });
+  });
+
+  it('the row unmute button unmutes a muted tab', async () => {
+    backgroundLists([{ ...LOFI, muted: true }]);
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText('Lofi'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unmute Lofi' }));
+
+    await waitFor(() =>
+      expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'toggleMute', tabId: 1, muted: false }),
+    );
+  });
+
+  it('a granted row shows the stored site volume', async () => {
+    const { setSiteVolume } = await import('@/lib/storage');
+    await setSiteVolume('youtube.com', 0.3);
+    fakeBrowser.permissions.contains = vi.fn(async () => true) as any;
+    render(<App donateUrl="https://ko-fi.com/x" />);
+
+    await waitFor(() => expect(screen.getByRole('slider')).toHaveValue('30'));
+    expect(screen.getByText('30%')).toBeTruthy();
+  });
+
+  it('moving the slider shows the new volume at once and sends it for the site', async () => {
+    fakeBrowser.permissions.contains = vi.fn(async () => true) as any;
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByRole('slider'));
+
+    fireEvent.input(screen.getByRole('slider'), { target: { value: '40' } });
+
+    await waitFor(() => screen.getByText('40%'));
+    expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'setVolume',
+      tabId: 1,
+      origin: 'youtube.com',
+      volume: 0.4,
+    });
+  });
+
+  it('a granted opt-in tells the background and refreshes', async () => {
+    fakeBrowser.permissions.request = vi.fn(async () => true) as any;
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText(/control volume here/i));
+
+    fireEvent.click(screen.getByText(/control volume here/i));
+
+    await waitFor(() => expect(listCalls()).toHaveLength(2));
+    expect(fakeBrowser.permissions.request).toHaveBeenCalledWith({ origins: ['*://youtube.com/*'] });
+    expect(fakeBrowser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'grantSite', tabId: 1, origin: 'youtube.com' });
+  });
+
+  it('a denied opt-in sends nothing', async () => {
+    fakeBrowser.permissions.request = vi.fn(async () => false) as any;
+    render(<App donateUrl="https://ko-fi.com/x" />);
+    await waitFor(() => screen.getByText(/control volume here/i));
+
+    fireEvent.click(screen.getByText(/control volume here/i));
+    await act(() => new Promise((r) => setTimeout(r, 20)));
+
+    expect(fakeBrowser.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'grantSite' }));
+    expect(listCalls()).toHaveLength(1);
   });
 
   it('keeps the current rows when a refresh gets no list back', async () => {

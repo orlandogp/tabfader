@@ -104,6 +104,8 @@ export function watchExtensionLiveness(opts: {
   }, checkMs);
 }
 
+// NOTE: wiring only; the browser runs it, so the E2E suite (not unit tests) covers it.
+// Stryker disable all
 export default defineContentScript({
   matches: [],               // no static matches — registered at runtime per granted origin
   registration: 'runtime',
@@ -139,3 +141,4 @@ export default defineContentScript({
     });
   },
 });
+// Stryker restore all

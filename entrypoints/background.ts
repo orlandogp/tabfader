@@ -186,6 +186,8 @@ export async function handleMessage(
   }
 }
 
+// NOTE: wiring only; the browser runs it, so the E2E suite (not unit tests) covers it.
+// Stryker disable all
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     handleMessage(msg as BackgroundMessage, sender)
@@ -197,3 +199,4 @@ export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(reregisterGrantedOrigins);
   browser.permissions.onAdded.addListener(handlePermissionsAdded);
 });
+// Stryker restore all
