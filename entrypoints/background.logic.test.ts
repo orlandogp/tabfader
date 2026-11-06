@@ -122,6 +122,36 @@ describe('handleMessage', () => {
     expect((fakeBrowser as any).scripting.executeScript).not.toHaveBeenCalled();
   });
 
+  // REVIEW BUG (2026-11-06): volume is stored per origin, but only the tab whose slider
+  // moved got the message; a second tab of the same site kept playing at the old level.
+  it('setVolume applies to every open tab of the origin, and only that origin', async () => {
+    fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
+    (fakeBrowser as any).scripting = { executeScript: vi.fn(async () => [] as any) };
+    fakeBrowser.tabs.query = vi.fn(async () => [
+      { id: 1, url: 'https://a.com/one' },
+      { id: 2, url: 'https://a.com/two' },
+      { id: 3, url: 'https://sub.a.com/x' },
+    ] as chrome.tabs.Tab[]) as any;
+
+    await handleMessage({ type: 'setVolume', tabId: 1, origin: 'a.com', volume: 0.3 }, {} as any);
+
+    expect(fakeBrowser.tabs.query).toHaveBeenCalledWith({ url: '*://a.com/*' });
+    const recipients = (fakeBrowser.tabs.sendMessage as ReturnType<typeof vi.fn>).mock.calls.map(([id]) => id);
+    expect(recipients.sort()).toEqual([1, 2]);
+    expect(fakeBrowser.tabs.sendMessage).toHaveBeenCalledWith(2, { type: 'applyVolume', volume: 0.3 });
+  });
+
+  it('setVolume still reaches the slider tab when the origin query misses it', async () => {
+    fakeBrowser.tabs.sendMessage = vi.fn(async () => undefined) as any;
+    (fakeBrowser as any).scripting = { executeScript: vi.fn(async () => [] as any) };
+    fakeBrowser.tabs.query = vi.fn(async () => [] as chrome.tabs.Tab[]) as any;
+
+    await handleMessage({ type: 'setVolume', tabId: 9, origin: 'a.com', volume: 0.3 }, {} as any);
+
+    expect(fakeBrowser.tabs.sendMessage).toHaveBeenCalledWith(9, { type: 'applyVolume', volume: 0.3 });
+    expect(fakeBrowser.tabs.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('setVolume re-injects the content script when delivery fails', async () => {
     // FIELD BUG (round 4): extension reloads/updates ORPHAN injected content
     // scripts — their message listener dies, so applyVolume was silently

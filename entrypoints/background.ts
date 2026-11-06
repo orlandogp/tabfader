@@ -9,7 +9,7 @@ import type { AudibleTab } from '@/lib/types';
 import { toAudibleTab, setTabMuted } from '@/lib/audible-tabs';
 import { getSiteVolume, setSiteVolume } from '@/lib/storage';
 import { hasOriginPermission } from '@/lib/permissions';
-import { matchPatternForOrigin } from '@/lib/origin';
+import { matchPatternForOrigin, originKeyFromUrl } from '@/lib/origin';
 
 const CONTENT_JS = 'content-scripts/content.js';
 
@@ -87,6 +87,26 @@ export async function handlePermissionsAdded(perms: chrome.permissions.Permissio
   }
 }
 
+async function deliverVolume(tabId: number, volume: number): Promise<void> {
+  try {
+    await browser.tabs.sendMessage(tabId, { type: 'applyVolume', volume });
+  } catch {
+    // No live listener in the tab: the script was never injected there, or
+    // an extension reload/update ORPHANED it (its message channel dies but
+    // its MutationObserver keeps enforcing the stale volume). Inject a
+    // fresh script now — it applies the just-stored volume on startup and
+    // WXT's script-started handshake retires the orphan.
+    try {
+      await browser.scripting.executeScript({
+        target: { tabId, allFrames: true },
+        files: [CONTENT_JS],
+      });
+    } catch {
+      /* restricted page or discarded tab — mute still works there */
+    }
+  }
+}
+
 export async function handleCommand(command: string): Promise<void> {
   if (command !== 'toggle-mute-active') return;
   const [active] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -140,26 +160,18 @@ export async function handleMessage(
       await Promise.all(tabs.map((t) => setTabMuted(t.id, msg.muted)));
       return;
     }
-    case 'setVolume':
+    case 'setVolume': {
       await setSiteVolume(msg.origin, msg.volume);
-      try {
-        await browser.tabs.sendMessage(msg.tabId, { type: 'applyVolume', volume: msg.volume });
-      } catch {
-        // No live listener in the tab: the script was never injected there, or
-        // an extension reload/update ORPHANED it (its message channel dies but
-        // its MutationObserver keeps enforcing the stale volume). Inject a
-        // fresh script now — it applies the just-stored volume on startup and
-        // WXT's script-started handshake retires the orphan.
-        try {
-          await browser.scripting.executeScript({
-            target: { tabId: msg.tabId, allFrames: true },
-            files: [CONTENT_JS],
-          });
-        } catch {
-          /* restricted page or discarded tab — mute still works there */
-        }
+      // Volume is stored per origin, so every open tab of the origin follows it.
+      const siteTabs = await browser.tabs.query({ url: matchPatternForOrigin(msg.origin) });
+      const tabIds = new Set([msg.tabId]);
+      for (const tab of siteTabs) {
+        // The match pattern ignores ports and may match more than the stored host key.
+        if (tab.id != null && tab.url && originKeyFromUrl(tab.url) === msg.origin) tabIds.add(tab.id);
       }
+      await Promise.all([...tabIds].map((tabId) => deliverVolume(tabId, msg.volume)));
       return;
+    }
     case 'grantSite': {
       // NOTE: the popup already called `requestOriginPermission` under the
       // click's user gesture (see popup/App.tsx `unlock`). Re-requesting here

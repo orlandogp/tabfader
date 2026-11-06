@@ -112,6 +112,19 @@ test('slider sets the real media volume', async ({ ext, site }) => {
   await expect(r.getByText('30%')).toBeVisible();
 });
 
+test('slider volume reaches every tab of the same site', async ({ ext, site }) => {
+  const one = await ext.openPlaying(site.granted('Site tab one'));
+  const two = await ext.openPlaying(site.granted('Site tab two'));
+  const popup = await ext.openPopup();
+
+  await row(popup, 'Site tab one').getByRole('slider', { name: 'Volume' }).fill('30');
+
+  await expect.poll(() => media(one).volume()).toBe(0.3);
+  await expect.poll(() => media(two).volume()).toBe(0.3);
+  // Both rows share the site's volume, so both sliders say so.
+  await expect(row(popup, 'Site tab two').getByText('30%')).toBeVisible();
+});
+
 test('mute + volume change + unmute keeps the volume and clears the mute', async ({ ext, site }) => {
   const page = await ext.openPlaying(site.granted('Combo'));
   const popup = await ext.openPopup();
