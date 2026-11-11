@@ -135,6 +135,18 @@ export class Harness {
     await next;
     await manager.close();
   }
+
+  /**
+   * Turns the extension off the way chrome://extensions' toggle does. Already-injected
+   * scripts are orphaned with NO successor: the same cleanup path as an uninstall.
+   */
+  async disableExtension(): Promise<void> {
+    const id = await this.extensionId();
+    const manager = await this.context.newPage();
+    await manager.goto('chrome://extensions');
+    await manager.evaluate((extId) => chrome.management.setEnabled(extId, false), id);
+    await manager.close();
+  }
 }
 
 /** Controls the `<audio id="a">` element of a media page. */

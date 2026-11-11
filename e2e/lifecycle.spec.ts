@@ -109,6 +109,22 @@ test('volume survives an extension reload and the slider still works after it', 
   await expect.poll(() => media(page).volume()).toBe(0.6);
 });
 
+// NOTE: field report (2026-11-10): leftovers after removing the extension must not exist.
+// The orphaned script used to restore 100%, leaving a page that played at 50% LOUDER than
+// before TabFader ever touched it. It must hand back the page's own volume.
+test('turning the extension off hands the page its own volume back', async ({ ext, site }) => {
+  test.setTimeout(60_000);
+  const page = await ext.openPlaying(site.granted('Turned off', { vol: '0.5' }));
+  const popup = await ext.openPopup();
+  await row(popup, 'Turned off').getByRole('slider', { name: 'Volume' }).fill('30');
+  await expect.poll(() => media(page).volume()).toBe(0.3);
+
+  await ext.disableExtension();
+
+  // The orphan notices within its 5s check, then waits its 8s grace for a successor.
+  await expect.poll(() => media(page).volume(), { timeout: 20_000 }).toBe(0.5);
+});
+
 test('volume survives a full browser restart', async ({ ext, site }) => {
   test.setTimeout(90_000);
   const url = site.granted('Restarted');

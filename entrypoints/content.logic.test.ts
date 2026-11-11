@@ -1,21 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { applyVolumeToMedia, createVolumeEnforcer, enforceVolume, readPageVolume, watchExtensionLiveness } from './content';
-
-describe('applyVolumeToMedia', () => {
-  it('sets .volume on all audio/video elements and counts them', () => {
-    document.body.innerHTML = '<video></video><audio></audio><div></div>';
-    const count = applyVolumeToMedia(document, 0.4);
-    expect(count).toBe(2);
-    const media = [...document.querySelectorAll('video,audio')] as HTMLMediaElement[];
-    expect(media.every((m) => m.volume === 0.4)).toBe(true);
-  });
-
-  it('clamps volume into [0,1]', () => {
-    document.body.innerHTML = '<video></video>';
-    applyVolumeToMedia(document, 5);
-    expect((document.querySelector('video') as HTMLMediaElement).volume).toBe(1);
-  });
-});
+import { createVolumeEnforcer, enforceVolume, readPageVolume, watchExtensionLiveness } from './content';
 
 describe('enforceVolume', () => {
   afterEach(() => {
@@ -303,11 +287,51 @@ describe('createVolumeEnforcer', () => {
     expect(audio().volume).toBe(1);
   });
 
-  it('reports whether it ever enforced a chosen volume', () => {
-    const enforcer = setup('<audio></audio>');
-    expect(enforcer.hasEnforced()).toBe(false);
-    enforcer.set(0.3);
-    expect(enforcer.hasEnforced()).toBe(true);
+  // NOTE: field report (2026-11-10): on uninstall/disable the orphan restored 100%, so a
+  // page that played at 50% ended up louder than before TabFader ever touched it.
+  describe('restore()', () => {
+    it("hands each element back the volume it had before TabFader's first write", () => {
+      const enforcer = setup('<audio></audio>');
+      audio().volume = 0.5;
+      enforcer.set(0.3);
+      enforcer.set(0.2);
+      enforcer.restore();
+      expect(audio().volume).toBe(0.5);
+    });
+
+    it('leaves elements TabFader never touched alone', () => {
+      const enforcer = setup('<audio></audio>');
+      audio().volume = 0.5;
+      enforcer.set(null);
+      audio().volume = 0.7;
+      enforcer.restore();
+      expect(audio().volume).toBe(0.7);
+    });
+
+    it('restores media found later, inside shadow roots too', async () => {
+      const enforcer = setup('');
+      enforcer.set(0.3);
+      const host = document.createElement('div');
+      host.attachShadow({ mode: 'open' }).innerHTML = '<audio></audio>';
+      const late = host.shadowRoot!.querySelector('audio') as HTMLAudioElement;
+      late.volume = 0.6;
+      document.body.appendChild(host);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(late.volume).toBe(0.3);
+
+      enforcer.restore();
+
+      expect(late.volume).toBe(0.6);
+    });
+
+    it('also stops enforcing, so the page keeps the restored volume', () => {
+      const enforcer = setup('<audio></audio>');
+      audio().volume = 0.5;
+      enforcer.set(0.3);
+      enforcer.restore();
+      pageSetsVolume(audio(), 0.9);
+      expect(audio().volume).toBe(0.9);
+    });
   });
 });
 

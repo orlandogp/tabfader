@@ -5,16 +5,6 @@ import { getSitePref } from '@/lib/storage';
 import { originKeyFromUrl } from '@/lib/origin';
 import { clampVolume } from '@/lib/volume';
 
-/** Pure, testable: set .volume on every media element under `root`. Returns count. */
-export function applyVolumeToMedia(root: ParentNode, volume: number): number {
-  const v = clampVolume(volume);
-  const media = root.querySelectorAll('video, audio');
-  media.forEach((el) => {
-    (el as HTMLMediaElement).volume = v;
-  });
-  return media.length;
-}
-
 /** Sets `.volume` only when it differs: every write fires `volumechange`, which we listen to. */
 export function enforceVolume(el: HTMLMediaElement, volume: number): void {
   const v = clampVolume(volume);
@@ -58,7 +48,17 @@ export function readPageVolume(root: Document): number | null {
  */
 export function createVolumeEnforcer(root: Document) {
   let target: number | null = null;
-  let enforced = false;
+  // NOTE: the page's own volume per element, captured right before TabFader's first write,
+  // so turning TabFader off hands it back exactly (WeakRefs: never keep removed media alive).
+  const originals = new WeakMap<HTMLMediaElement, number>();
+  const touched = new Set<WeakRef<HTMLMediaElement>>();
+  function write(el: HTMLMediaElement) {
+    if (!originals.has(el) && el.volume !== target) {
+      originals.set(el, el.volume);
+      touched.add(new WeakRef(el));
+    }
+    enforceVolume(el, target!);
+  }
   let fights = new WeakMap<HTMLMediaElement, { since: number; count: number }>();
 
   const onVolumeChange = (event: Event) => {
@@ -69,7 +69,7 @@ export function createVolumeEnforcer(root: Document) {
     if (!fight || now - fight.since > REENFORCE_WINDOW_MS) fight = { since: now, count: 0 };
     fights.set(el, fight);
     if (++fight.count > MAX_REENFORCEMENTS) return; // yielded until the user picks a volume again
-    enforceVolume(el, target);
+    write(el);
   };
   // NOTE: only what was added is scanned, not the whole document on every mutation
   // (chat-heavy SPAs mutate constantly).
@@ -94,9 +94,15 @@ export function createVolumeEnforcer(root: Document) {
   function visit(node: Node) {
     if (!(node instanceof Element)) return;
     for (const el of deepElements(node)) {
-      if (el instanceof HTMLMediaElement) enforceVolume(el, target!);
+      if (el instanceof HTMLMediaElement) write(el);
       if (el.shadowRoot) watch(el.shadowRoot);
     }
+  }
+
+  function stop() {
+    observer.disconnect();
+    for (const scope of scopes) scope.removeEventListener('volumechange', onVolumeChange, true);
+    scopes.clear();
   }
 
   watch(root);
@@ -106,15 +112,17 @@ export function createVolumeEnforcer(root: Document) {
       target = volume === null ? null : clampVolume(volume);
       fights = new WeakMap(); // a fresh choice is worth fighting for again
       if (target === null) return;
-      enforced = true;
       visit(root.documentElement);
     },
-    /** True once a chosen volume was applied, i.e. there is something to undo on uninstall. */
-    hasEnforced: () => enforced,
-    stop() {
-      observer.disconnect();
-      for (const scope of scopes) scope.removeEventListener('volumechange', onVolumeChange, true);
-      scopes.clear();
+    stop,
+    /** Stops enforcing and gives every touched element back its pre-TabFader volume. */
+    restore() {
+      stop();
+      for (const ref of touched) {
+        const el = ref.deref();
+        if (el) el.volume = originals.get(el)!;
+      }
+      touched.clear();
     },
   };
 }
@@ -180,9 +188,7 @@ export default defineContentScript({
     watchExtensionLiveness({
       isAlive: () => Boolean(browser.runtime?.id),
       onOrphaned: () => enforcer.stop(),
-      onUninstalled: () => {
-        if (enforcer.hasEnforced()) applyVolumeToMedia(document, 1);
-      },
+      onUninstalled: () => enforcer.restore(),
       successorEvents: document,
     });
 
